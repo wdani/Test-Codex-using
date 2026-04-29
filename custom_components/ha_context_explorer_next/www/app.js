@@ -71,7 +71,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
   async load() {
     try {
-      const payload = await this._hass.callApi("GET", "api/ha_context_explorer_next/summary");
+      const payload = await this._hass.callApi("GET", "ha_context_explorer_next/summary");
       const entitiesTotal = payload.summary?.entities_total ?? 0;
       const unavailable = payload.summary?.entities_unavailable_or_unknown ?? 0;
       const batteryLow = payload.battery?.battery_entities_low ?? 0;
