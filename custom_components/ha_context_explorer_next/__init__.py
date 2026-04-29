@@ -50,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     state = hass.data.setdefault(DOMAIN, {})
-    if state.get("panel_registered"):
+    if unload_ok and state.get("panel_registered"):
         async_remove_panel(hass, PANEL_URL.strip("/"))
         state["panel_registered"] = False
     return unload_ok
