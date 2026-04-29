@@ -3,6 +3,7 @@ from __future__ import annotations
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
+from .const import DOMAIN
 from .service import build_ai_export_payload, build_ideas_payload, build_snapshot_payload
 
 
@@ -36,6 +37,10 @@ class IdeasView(HomeAssistantView):
 
 
 def async_register_api(hass: HomeAssistant) -> None:
+    state = hass.data.setdefault(DOMAIN, {})
+    if state.get("api_registered"):
+        return
     hass.http.register_view(SummaryView)
     hass.http.register_view(ExportView)
     hass.http.register_view(IdeasView)
+    state["api_registered"] = True
