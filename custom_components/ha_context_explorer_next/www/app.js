@@ -1,6 +1,37 @@
+const I18N = {
+  en: {
+    title: "HA Context Explorer Next",
+    topNoisy: "Top noisy entities",
+    recommendations: "Recommendations",
+    entities: "Entities",
+    unavailable: "Unavailable/Unknown",
+    lowBattery: "Low battery",
+    next: "Next",
+    error: "Error",
+    score: "score",
+  },
+  de: {
+    title: "HA Context Explorer Next",
+    topNoisy: "Entitäten mit hoher Last",
+    recommendations: "Empfehlungen",
+    entities: "Entitäten",
+    unavailable: "Nicht verfügbar/Unbekannt",
+    lowBattery: "Niedriger Batteriestand",
+    next: "Nächster Schritt",
+    error: "Fehler",
+    score: "Score",
+  },
+};
+
+function t(lang, key) {
+  const locale = I18N[lang] ? lang : "en";
+  return I18N[locale][key] || I18N.en[key] || key;
+}
+
 class HaContextExplorerNextPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
+    this._lang = (hass.language || "en").slice(0, 2);
     if (!this._loaded) {
       this._loaded = true;
       this.render();
@@ -10,15 +41,15 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
   render() {
     this.innerHTML = `
-      <ha-card header="HA Context Explorer Next">
+      <ha-card header="${t(this._lang, "title")}">
         <div style="padding:16px;display:grid;gap:12px;">
           <div id="kpis" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
           <div>
-            <h3>Top noisy entities</h3>
+            <h3>${t(this._lang, "topNoisy")}</h3>
             <ul id="noise"></ul>
           </div>
           <div>
-            <h3>Recommendations</h3>
+            <h3>${t(this._lang, "recommendations")}</h3>
             <div id="recs" style="display:grid;gap:8px;"></div>
           </div>
         </div>
@@ -34,7 +65,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
     return `<div style="padding:10px;border:1px solid var(--divider-color);border-radius:10px;">
       <b>[${rec.severity.toUpperCase()}] ${rec.title}</b>
       <div>${rec.detail}</div>
-      <small><b>Next:</b> ${rec.next_action || "-"}</small>
+      <small><b>${t(this._lang, "next")}:</b> ${rec.next_action || "-"}</small>
     </div>`;
   }
 
@@ -47,20 +78,20 @@ class HaContextExplorerNextPanel extends HTMLElement {
       const topNoise = (payload.noise?.top_noisy_entities || []).slice(0, 5);
 
       this.querySelector("#kpis").innerHTML = [
-        this._kpi("Entities", entitiesTotal),
-        this._kpi("Unavailable/Unknown", unavailable),
-        this._kpi("Low battery", batteryLow),
+        this._kpi(t(this._lang, "entities"), entitiesTotal),
+        this._kpi(t(this._lang, "unavailable"), unavailable),
+        this._kpi(t(this._lang, "lowBattery"), batteryLow),
       ].join("");
 
       this.querySelector("#noise").innerHTML = topNoise
-        .map((item) => `<li>${item.entity_id} — score ${item.noise_score}</li>`)
+        .map((item) => `<li>${item.entity_id} — ${t(this._lang, "score")} ${item.noise_score}</li>`)
         .join("");
 
       this.querySelector("#recs").innerHTML = (payload.recommendations || [])
         .map((rec) => this._rec(rec))
         .join("");
     } catch (err) {
-      this.innerHTML = `<ha-card><div style="padding:16px">Error: ${err}</div></ha-card>`;
+      this.innerHTML = `<ha-card><div style="padding:16px">${t(this._lang, "error")}: ${err}</div></ha-card>`;
     }
   }
 }
