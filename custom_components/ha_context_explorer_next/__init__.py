@@ -3,18 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from homeassistant.components.frontend import async_register_built_in_panel, async_remove_panel
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .api import async_register_api
-from .const import (
-    DOMAIN,
-    PANEL_ICON,
-    PANEL_MODULE_URL,
-    PANEL_TITLE,
-    PANEL_URL,
-    PLATFORMS,
-)
+from .const import DOMAIN, PANEL_ICON, PANEL_MODULE_URL, PANEL_TITLE, PANEL_URL, PLATFORMS
 
 
 def _module_path() -> str:
@@ -25,7 +19,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     state = hass.data.setdefault(DOMAIN, {})
 
     if not state.get("static_registered"):
-        hass.http.register_static_path(PANEL_MODULE_URL, _module_path(), cache_headers=False)
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(PANEL_MODULE_URL, _module_path(), cache_headers=False)]
+        )
         state["static_registered"] = True
 
     async_register_api(hass)
