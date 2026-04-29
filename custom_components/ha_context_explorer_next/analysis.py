@@ -31,16 +31,20 @@ def build_entity_activity_summary(states: list[Any]) -> dict[str, Any]:
 
 def build_noise_summary(states: list[Any]) -> dict[str, Any]:
     top_by_attr_size: list[dict[str, Any]] = []
+    domain_noise = Counter()
 
     for state in states:
+        entity_id = getattr(state, "entity_id", "unknown.unknown")
+        domain = _entity_domain(entity_id)
         attrs = getattr(state, "attributes", {}) or {}
         attr_keys = len(attrs.keys())
         attr_chars = sum(len(str(k)) + len(str(v)) for k, v in attrs.items())
         score = (attr_keys * 2) + attr_chars
+        domain_noise[domain] += score
         top_by_attr_size.append(
             {
-                "entity_id": getattr(state, "entity_id", "unknown.unknown"),
-                "domain": _entity_domain(getattr(state, "entity_id", "unknown.unknown")),
+                "entity_id": entity_id,
+                "domain": domain,
                 "attributes_count": attr_keys,
                 "attributes_chars": attr_chars,
                 "noise_score": score,
@@ -49,10 +53,12 @@ def build_noise_summary(states: list[Any]) -> dict[str, Any]:
 
     top_by_attr_size.sort(key=lambda i: i["noise_score"], reverse=True)
     top_noisy = top_by_attr_size[:20]
+    top_domains = [{"domain": d, "noise_score": s} for d, s in domain_noise.most_common(10)]
 
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "top_noisy_entities": top_noisy,
+        "top_noisy_domains": top_domains,
     }
 
 
@@ -60,7 +66,10 @@ def build_battery_summary(states: list[Any]) -> dict[str, Any]:
     battery_entities = []
     for state in states:
         entity_id = getattr(state, "entity_id", "")
-        if entity_id.startswith("sensor.") and ("battery" in entity_id.lower() or "battery" in getattr(state, "name", "").lower()):
+        state_name = getattr(state, "name", "")
+        if entity_id.startswith("sensor.") and (
+            "battery" in entity_id.lower() or "battery" in state_name.lower()
+        ):
             value = getattr(state, "state", None)
             battery_entities.append({"entity_id": entity_id, "state": value})
 
@@ -79,51 +88,77 @@ def build_battery_summary(states: list[Any]) -> dict[str, Any]:
     }
 
 
+def _rec(id_: str, severity: str, title: str, detail: str, next_action: str) -> dict[str, str]:
+    return {
+        "id": id_,
+        "severity": severity,
+        "title": title,
+        "detail": detail,
+        "next_action": next_action,
+    }
+
+
 def generate_recommendations(
-    summary: dict[str, Any],
-    noise_summary: dict[str, Any],
-    battery_summary: dict[str, Any],
+    summary: dict[str, Any], noise_summary: dict[str, Any], battery_summary: dict[str, Any]
 ) -> list[dict[str, str]]:
     recs: list[dict[str, str]] = []
 
     if summary.get("entities_unavailable_or_unknown", 0) > 0:
-        recs.append({
-            "id": "availability-review",
-            "severity": "medium",
-            "title": "Review unavailable entities",
-            "detail": "Some entities are unavailable/unknown; check connectivity, power, and integration health.",
-        })
+        recs.append(
+            _rec(
+                "availability-review",
+                "medium",
+                "Review unavailable entities",
+                "Some entities are unavailable/unknown; check connectivity, power, and integration health.",
+                "Open entities view and inspect unavailable devices/integrations first.",
+            )
+        )
 
     if summary.get("entities_total", 0) > 500:
-        recs.append({
-            "id": "scale-recorder-review",
-            "severity": "high",
-            "title": "Recorder optimization suggested",
-            "detail": "Large installations benefit from include/exclude tuning and purge strategy.",
-        })
+        recs.append(
+            _rec(
+                "scale-recorder-review",
+                "high",
+                "Recorder optimization suggested",
+                "Large installations benefit from include/exclude tuning and purge strategy.",
+                "Review recorder include/exclude and verify purge retention settings.",
+            )
+        )
 
     if battery_summary.get("battery_entities_low", 0) > 0:
-        recs.append({
-            "id": "battery-attention",
-            "severity": "high",
-            "title": "Low battery devices detected",
-            "detail": "Low battery entities were detected; replace/recharge soon to avoid automation instability.",
-        })
+        recs.append(
+            _rec(
+                "battery-attention",
+                "high",
+                "Low battery devices detected",
+                "Low battery entities were detected; replace/recharge soon to avoid automation instability.",
+                "Replace/recharge low battery devices in the next maintenance window.",
+            )
+        )
 
     if noise_summary.get("top_noisy_entities"):
-        recs.append({
-            "id": "noise-hotspots",
-            "severity": "medium",
-            "title": "High-noise entities identified",
-            "detail": "Review top noisy entities to reduce recorder churn and excess log verbosity.",
-        })
+        recs.append(
+            _rec(
+                "noise-hotspots",
+                "medium",
+                "High-noise entities identified",
+                "Review top noisy entities to reduce recorder churn and excess log verbosity.",
+                "Exclude non-essential high-noise entities from recorder/logbook.",
+            )
+        )
+
+    severity_order = {"high": 0, "medium": 1, "low": 2}
 
     if not recs:
-        recs.append({
-            "id": "healthy-baseline",
-            "severity": "low",
-            "title": "No immediate issues detected",
-            "detail": "Current baseline looks healthy for this quick pass.",
-        })
+        recs.append(
+            _rec(
+                "healthy-baseline",
+                "low",
+                "No immediate issues detected",
+                "Current baseline looks healthy for this quick pass.",
+                "Keep monitoring weekly and revisit after major integration changes.",
+            )
+        )
 
+    recs.sort(key=lambda r: severity_order.get(r["severity"], 99))
     return recs

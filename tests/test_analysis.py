@@ -39,3 +39,13 @@ def test_generate_recommendations_returns_expected_items():
     battery = {"battery_entities_low": 1}
     rec_ids = {r["id"] for r in analysis.generate_recommendations(summary, noise, battery)}
     assert {"availability-review", "scale-recorder-review", "battery-attention", "noise-hotspots"}.issubset(rec_ids)
+
+
+def test_generate_recommendations_sorted_by_severity_and_next_action():
+    summary = {"entities_total": 10, "entities_unavailable_or_unknown": 1}
+    noise = {"top_noisy_entities": [{"entity_id": "sensor.big"}]}
+    battery = {"battery_entities_low": 1}
+    recs = analysis.generate_recommendations(summary, noise, battery)
+    severities = [r["severity"] for r in recs]
+    assert severities[0] == "high"
+    assert all("next_action" in r for r in recs)

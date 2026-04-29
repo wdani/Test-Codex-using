@@ -31,7 +31,7 @@ def test_build_snapshot_payload_shape():
 
 def test_build_ai_export_payload_contains_sections():
     export = service.build_ai_export_payload([_state("sensor.temp", "20")])
-    assert export["schema_version"] == "1.1.0"
+    assert export["schema_version"] == "1.2.0"
     assert "summary" in export and "noise" in export and "battery" in export
 
 
