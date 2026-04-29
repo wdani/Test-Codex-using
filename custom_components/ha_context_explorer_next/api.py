@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+from homeassistant.components.http import HomeAssistantView
+from homeassistant.core import HomeAssistant
+
+from .service import build_ai_export_payload, build_ideas_payload, build_snapshot_payload
+
+
+class SummaryView(HomeAssistantView):
+    url = "/api/ha_context_explorer_next/summary"
+    name = "api:ha_context_explorer_next:summary"
+    requires_auth = True
+
+    async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        return self.json(build_snapshot_payload(list(hass.states.async_all())))
+
+
+class ExportView(HomeAssistantView):
+    url = "/api/ha_context_explorer_next/export/ai_context"
+    name = "api:ha_context_explorer_next:export_ai_context"
+    requires_auth = True
+
+    async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        return self.json(build_ai_export_payload(list(hass.states.async_all())))
+
+
+class IdeasView(HomeAssistantView):
+    url = "/api/ha_context_explorer_next/ideas"
+    name = "api:ha_context_explorer_next:ideas"
+    requires_auth = True
+
+    async def get(self, request):
+        return self.json(build_ideas_payload())
+
+
+def async_register_api(hass: HomeAssistant) -> None:
+    hass.http.register_view(SummaryView)
+    hass.http.register_view(ExportView)
+    hass.http.register_view(IdeasView)
