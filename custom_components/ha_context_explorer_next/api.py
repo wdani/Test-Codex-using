@@ -55,6 +55,11 @@ class IdeasView(HomeAssistantView):
         hass: HomeAssistant = request.app["hass"]
         if not _integration_enabled(hass):
             return self.json_message("Integration disabled", status_code=503)
+
+        user = request.get("hass_user")
+        if user is None or not user.is_admin:
+            return self.json_message("Admin access required", status_code=403)
+
         return self.json(build_ideas_payload())
 
 
