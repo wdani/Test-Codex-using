@@ -23,3 +23,29 @@ HA Context Explorer Next helps users understand:
 ## Status
 
 This repository is an active prototype.
+
+## Privacy key configuration
+
+For production-like usage, set a unique mask key so deterministic masking tokens are not derived from the default fallback key.
+
+- environment variable: `HCX_MASK_KEY`
+- effect: used by `stable_mask` keyed HMAC digest
+
+Example:
+
+```bash
+export HCX_MASK_KEY="replace-with-a-long-random-secret"
+```
+
+## Export levels
+
+Two admin-only export levels are available:
+
+- `deep` (default): full payload with deep context
+- `short`: compact payload for quick LLM prompts
+
+Endpoints:
+
+- `/api/ha_context_explorer_next/export/ai_context`
+- `/api/ha_context_explorer_next/export/ai_context/short`
+- `/api/ha_context_explorer_next/export/ai_context/deep`

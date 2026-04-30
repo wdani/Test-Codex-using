@@ -60,3 +60,16 @@ def test_export_contains_action_queue_and_llm_context():
     assert "action_queue" in export
     assert "llm_context_short" in export
     assert "llm_context_deep" in export
+
+
+def test_export_short_level_is_compact():
+    export = service.build_ai_export_payload([_state("sensor.temp", "20")], level="short")
+    assert export["export_level"] == "short"
+    assert "llm_context_short" in export
+    assert "llm_context_deep" not in export
+
+
+def test_export_unknown_level_falls_back_to_deep():
+    export = service.build_ai_export_payload([_state("sensor.temp", "20")], level="unknown")
+    assert export["export_level"] == "deep"
+    assert "llm_context_deep" in export

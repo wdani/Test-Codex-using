@@ -12,6 +12,8 @@ from .analysis import (
 from .exporter import build_ai_context_bundle
 from .privacy import mask_payload
 
+EXPORT_LEVELS = {"short", "deep"}
+
 
 def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     summary = build_entity_activity_summary(states)
@@ -28,15 +30,31 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     }
 
 
-def build_ai_export_payload(states: list[Any]) -> dict[str, Any]:
+def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str, Any]:
+    level = level if level in EXPORT_LEVELS else "deep"
     snapshot = mask_payload(build_snapshot_payload(states))
-    return build_ai_context_bundle(
+    bundle = build_ai_context_bundle(
         snapshot["summary"],
         snapshot["noise"],
         snapshot["battery"],
         snapshot["recommendations"],
         snapshot["recorder_advice"],
     )
+    bundle["export_level"] = level
+
+    if level == "short":
+        return {
+            "schema_version": bundle["schema_version"],
+            "generated_at": bundle["generated_at"],
+            "product": bundle["product"],
+            "export_level": "short",
+            "meta": bundle["meta"],
+            "summary": bundle["summary"],
+            "action_queue": bundle["action_queue"],
+            "llm_context_short": bundle["llm_context_short"],
+        }
+
+    return bundle
 
 
 def build_ideas_payload() -> dict[str, list[str]]:
