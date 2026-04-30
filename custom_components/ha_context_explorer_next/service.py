@@ -11,7 +11,7 @@ from .analysis import (
     generate_recommendations,
 )
 from .exporter import build_ai_context_bundle
-from .privacy import mask_payload
+from .privacy import has_custom_mask_key, mask_payload
 
 EXPORT_LEVELS = {"short", "deep"}
 
@@ -22,7 +22,7 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     battery = build_battery_summary(states)
     recommendations = generate_recommendations(summary, noise, battery)
     recorder_advice = build_recorder_advice(noise)
-    domain_health = build_domain_health(summary, noise)
+    domain_health = build_domain_health(states, noise)
     return {
         "summary": summary,
         "noise": noise,
@@ -36,6 +36,9 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
 def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str, Any]:
     level = level if level in EXPORT_LEVELS else "deep"
     snapshot = mask_payload(build_snapshot_payload(states))
+    if not has_custom_mask_key():
+        raise ValueError("HCX_MASK_KEY must be set for export")
+
     bundle = build_ai_context_bundle(
         snapshot["summary"],
         snapshot["noise"],

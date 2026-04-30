@@ -50,7 +50,10 @@ class ExportView(HomeAssistantView):
         if denied:
             return denied
 
-        return self.json(build_ai_export_payload(list(hass.states.async_all()), level="deep"))
+        try:
+            return self.json(build_ai_export_payload(list(hass.states.async_all()), level="deep"))
+        except ValueError as exc:
+            return self.json_message(str(exc), status_code=412)
 
 
 class ExportLevelView(HomeAssistantView):
@@ -67,7 +70,10 @@ class ExportLevelView(HomeAssistantView):
         if denied:
             return denied
 
-        return self.json(build_ai_export_payload(list(hass.states.async_all()), level=level))
+        try:
+            return self.json(build_ai_export_payload(list(hass.states.async_all()), level=level))
+        except ValueError as exc:
+            return self.json_message(str(exc), status_code=412)
 
 
 class IdeasView(HomeAssistantView):
