@@ -1,4 +1,5 @@
 import sys
+import types
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,8 +7,14 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "custom_components/ha_context_explorer_next"
 
-# load package modules into sys.modules so relative imports in service.py work
-for name in ["analysis", "exporter", "service"]:
+# create lightweight package shell so relative imports do not trigger integration __init__.py
+pkg_name = "custom_components.ha_context_explorer_next"
+if pkg_name not in sys.modules:
+    pkg = types.ModuleType(pkg_name)
+    pkg.__path__ = [str(PACKAGE)]
+    sys.modules[pkg_name] = pkg
+
+for name in ["analysis", "exporter", "privacy", "service"]:
     path = PACKAGE / f"{name}.py"
     spec = spec_from_file_location(f"custom_components.ha_context_explorer_next.{name}", path)
     mod = module_from_spec(spec)

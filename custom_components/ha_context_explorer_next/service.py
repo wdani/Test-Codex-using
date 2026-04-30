@@ -10,6 +10,7 @@ from .analysis import (
     generate_recommendations,
 )
 from .exporter import build_ai_context_bundle
+from .privacy import mask_payload
 
 
 def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
@@ -28,7 +29,7 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
 
 
 def build_ai_export_payload(states: list[Any]) -> dict[str, Any]:
-    snapshot = build_snapshot_payload(states)
+    snapshot = mask_payload(build_snapshot_payload(states))
     return build_ai_context_bundle(
         snapshot["summary"],
         snapshot["noise"],

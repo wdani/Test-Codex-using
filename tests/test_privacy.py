@@ -16,3 +16,10 @@ def test_mask_text_masks_ipv4_and_mac():
     assert "192.168.1.10" not in masked
     assert "AA:BB:CC:DD:EE:FF" not in masked
     assert "ip_" in masked and "mac_" in masked
+
+
+def test_mask_payload_masks_nested_strings():
+    payload = {"x": ["mac AA:BB:CC:DD:EE:FF", {"ip": "10.0.0.1"}]}
+    masked = privacy.mask_payload(payload)
+    assert "AA:BB:CC:DD:EE:FF" not in str(masked)
+    assert "10.0.0.1" not in str(masked)
