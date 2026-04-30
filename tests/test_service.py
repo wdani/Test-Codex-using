@@ -1,3 +1,4 @@
+import os
 import sys
 import types
 from importlib.util import module_from_spec, spec_from_file_location
@@ -22,6 +23,7 @@ for name in ["analysis", "exporter", "privacy", "service"]:
     spec.loader.exec_module(mod)
 
 service = sys.modules["custom_components.ha_context_explorer_next.service"]
+os.environ["HCX_MASK_KEY"] = "test-mask-key"
 
 
 def _state(entity_id, state, attributes=None, name=""):
@@ -33,7 +35,7 @@ def test_build_snapshot_payload_shape():
         _state("sensor.temp", "20", {"unit_of_measurement": "°C"}),
         _state("sensor.door_battery", "19", name="Door Battery"),
     ])
-    assert set(payload.keys()) == {"summary", "noise", "battery", "recommendations", "recorder_advice"}
+    assert set(payload.keys()) == {"summary", "noise", "battery", "recommendations", "recorder_advice", "domain_health"}
 
 
 def test_build_ai_export_payload_contains_sections():
@@ -73,3 +75,24 @@ def test_export_unknown_level_falls_back_to_deep():
     export = service.build_ai_export_payload([_state("sensor.temp", "20")], level="unknown")
     assert export["export_level"] == "deep"
     assert "llm_context_deep" in export
+
+
+def test_domain_health_present_in_snapshot():
+    payload = service.build_snapshot_payload([_state("sensor.temp", "20")])
+    assert "domain_health" in payload
+    assert isinstance(payload["domain_health"], list)
+
+
+def test_export_requires_custom_mask_key(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    try:
+        service.build_ai_export_payload([_state("sensor.temp", "20")])
+        assert False, "expected ValueError"
+    except ValueError:
+        assert True
+
+
+def test_domain_health_uses_all_domains_not_top10_only():
+    states = [_state(f"domain{i}.x", "on") for i in range(12)]
+    payload = service.build_snapshot_payload(states)
+    assert len(payload["domain_health"]) >= 12

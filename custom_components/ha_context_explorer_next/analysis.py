@@ -227,3 +227,23 @@ def build_recorder_advice(noise_summary: dict[str, Any]) -> dict[str, Any]:
         "yaml_preview": yaml_preview,
         "note": "Review manually before applying; avoid excluding critical control/security entities.",
     }
+
+
+def build_domain_health(states: list[Any], noise_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    domain_counts: dict[str, int] = {}
+    for state in states:
+        entity_id = getattr(state, "entity_id", "unknown.unknown")
+        domain = _entity_domain(entity_id)
+        domain_counts[domain] = domain_counts.get(domain, 0) + 1
+    domain_noise = {d["domain"]: int(d.get("noise_score", 0)) for d in noise_summary.get("top_noisy_domains", [])}
+
+    rows = []
+    for domain in sorted(set(domain_counts) | set(domain_noise)):
+        count = domain_counts.get(domain, 0)
+        noise = domain_noise.get(domain, 0)
+        density = round(noise / count, 2) if count else 0
+        risk = "aggressive" if density >= 2000 else "review" if density >= 500 else "safe"
+        rows.append({"domain": domain, "entities": count, "noise_score": noise, "noise_density": density, "risk": risk})
+
+    rows.sort(key=lambda r: r["noise_density"], reverse=True)
+    return rows[:20]

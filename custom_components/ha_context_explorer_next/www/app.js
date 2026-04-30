@@ -15,6 +15,12 @@ const I18N = {
     domainFilter: "Domain filter",
     sortBy: "Sort",
     risk: "Risk",
+    exportWorkbench: "Export workbench",
+    exportLevel: "Export level",
+    copyExport: "Copy export JSON",
+    copyShort: "Copy LLM short",
+    copyFirst: "Copy do_first",
+    domainHealth: "Domain health matrix",
   },
   de: {
     title: "HA Context Explorer Next",
@@ -32,6 +38,12 @@ const I18N = {
     domainFilter: "Domain-Filter",
     sortBy: "Sortierung",
     risk: "Risiko",
+    exportWorkbench: "Export-Werkbank",
+    exportLevel: "Export-Level",
+    copyExport: "Export-JSON kopieren",
+    copyShort: "LLM Kurzkontext kopieren",
+    copyFirst: "do_first kopieren",
+    domainHealth: "Domain-Gesundheitsmatrix",
   },
 };
 
@@ -48,6 +60,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this._loaded = true;
       this._sort = "score_desc";
       this._domain = "all";
+      this._exportLevel = "short";
       this.render();
       this.load();
     }
@@ -67,6 +80,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .risk-safe { background:#2e7d3233; color:#2e7d32; }
         .risk-review { background:#f9a82533; color:#8d6e00; }
         .risk-aggressive { background:#c6282833; color:#b71c1c; }
+        .hint { font-size:12px; color:var(--secondary-text-color); }
         @media (max-width: 700px) { .kpi { min-width:unset; width:100%; } }
       </style>
       <ha-card header="${t(this._lang, "title")}">
@@ -90,6 +104,22 @@ class HaContextExplorerNextPanel extends HTMLElement {
             </div>
             <table id="recorderTable"></table>
             <pre id="recorder"></pre>
+          </div>
+          <div class="card">
+            <h3>${t(this._lang, "domainHealth")}</h3>
+            <table id="domainHealthTable"></table>
+          </div>
+          <div class="card">
+            <h3>${t(this._lang, "exportWorkbench")}</h3>
+            <div class="controls">
+              <label>${t(this._lang, "exportLevel")}: <select id="exportLevelSelect"><option value="short">short</option><option value="deep">deep</option></select></label>
+              <button id="copyExportBtn" type="button">${t(this._lang, "copyExport")}</button>
+              <button id="copyShortBtn" type="button">${t(this._lang, "copyShort")}</button>
+              <button id="copyFirstBtn" type="button">${t(this._lang, "copyFirst")}</button>
+              <small id="exportCopyState"></small>
+            </div>
+            <div class="hint" id="exportHint"></div>
+            <pre id="exportPreview"></pre>
           </div>
           <div>
             <h3>${t(this._lang, "recommendations")}</h3>
@@ -133,6 +163,16 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .join("")}</tbody>`;
   }
 
+  async _loadExport() {
+    const level = this._exportLevel;
+    const path = `ha_context_explorer_next/export/ai_context/${level}`;
+    const payload = await this._hass.callApi("GET", path);
+    this._exportPayload = payload;
+    const firstCount = payload?.action_queue?.do_first?.length || 0;
+    this.querySelector("#exportHint").textContent = `level=${level}, do_first=${firstCount}`;
+    this.querySelector("#exportPreview").textContent = JSON.stringify(payload, null, 2);
+  }
+
   async load() {
     try {
       const payload = await this._hass.callApi("GET", "ha_context_explorer_next/summary");
@@ -150,6 +190,12 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this.querySelector("#noise").innerHTML = topNoise
         .map((item) => `<li>${item.entity_id} — ${t(this._lang, "score")} ${item.noise_score}</li>`)
         .join("");
+
+
+      const domainHealthRows = (payload.domain_health || [])
+        .map((d) => `<tr><td>${d.domain}</td><td>${d.entities}</td><td>${d.noise_score}</td><td>${d.noise_density}</td><td>${this._riskBadge(d.risk)}</td></tr>`)
+        .join("");
+      this.querySelector("#domainHealthTable").innerHTML = `<thead><tr><th>Domain</th><th>Entities</th><th>Score</th><th>Density</th><th>Risk</th></tr></thead><tbody>${domainHealthRows}</tbody>`;
 
       const recorderAdvice = payload.recorder_advice || {};
       this.querySelector("#recorder").textContent = JSON.stringify(recorderAdvice.yaml_preview || {}, null, 2);
@@ -178,7 +224,26 @@ class HaContextExplorerNextPanel extends HTMLElement {
         }
       };
 
+      this.querySelector("#exportLevelSelect").onchange = async (e) => {
+        this._exportLevel = e.target.value;
+        await this._loadExport();
+      };
+
+      const copyText = async (text) => {
+        try {
+          await navigator.clipboard.writeText(text);
+          this.querySelector("#exportCopyState").textContent = t(this._lang, "copied");
+        } catch (e) {
+          this.querySelector("#exportCopyState").textContent = `${t(this._lang, "error")}: ${e}`;
+        }
+      };
+
+      this.querySelector("#copyExportBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload || {}, null, 2));
+      this.querySelector("#copyShortBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.llm_context_short || {}, null, 2));
+      this.querySelector("#copyFirstBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.action_queue?.do_first || [], null, 2));
+
       this._renderRecorderTable(recorderAdvice);
+      await this._loadExport();
 
       this.querySelector("#recs").innerHTML = (payload.recommendations || []).map((rec) => this._rec(rec)).join("");
     } catch (err) {

@@ -34,3 +34,7 @@ def mask_payload(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: mask_payload(v) for k, v in value.items()}
     return value
+
+
+def has_custom_mask_key() -> bool:
+    return os.getenv("HCX_MASK_KEY") not in {None, "", DEFAULT_MASK_KEY}
