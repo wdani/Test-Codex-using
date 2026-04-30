@@ -46,3 +46,10 @@ def test_build_ai_export_payload_contains_sections():
 def test_build_ideas_payload_has_multiple_ideas():
     ideas = service.build_ideas_payload()["ideas"]
     assert len(ideas) >= 5
+
+
+def test_recorder_advice_contains_yaml_preview():
+    payload = service.build_snapshot_payload([_state("sensor.a", "1", {"x": "y" * 5000})])
+    advice = payload["recorder_advice"]
+    assert "yaml_preview" in advice
+    assert "recorder" in advice["yaml_preview"]

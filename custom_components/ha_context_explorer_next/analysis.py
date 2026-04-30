@@ -167,33 +167,63 @@ def generate_recommendations(
 
 
 def build_recorder_advice(noise_summary: dict[str, Any]) -> dict[str, Any]:
-    top_entities = noise_summary.get("top_noisy_entities", [])[:10]
-    top_domains = noise_summary.get("top_noisy_domains", [])[:5]
+    top_entities = noise_summary.get("top_noisy_entities", [])[:12]
+    top_domains = noise_summary.get("top_noisy_domains", [])[:6]
 
-    suggested_exclude_entities = [
-        e["entity_id"]
-        for e in top_entities
-        if e.get("noise_score", 0) >= 2500 and e.get("domain") not in {"alarm_control_panel", "lock"}
-    ][:8]
+    def risk_for_entity(score: int) -> str:
+        if score >= 6000:
+            return "aggressive"
+        if score >= 3500:
+            return "review"
+        return "safe"
 
-    suggested_exclude_domains = [
-        d["domain"]
-        for d in top_domains
-        if d.get("noise_score", 0) >= 10000 and d.get("domain") not in {"binary_sensor", "sensor"}
-    ][:4]
+    entity_suggestions = []
+    for e in top_entities:
+        score = int(e.get("noise_score", 0))
+        domain = e.get("domain")
+        if domain in {"alarm_control_panel", "lock"}:
+            continue
+        if score < 2500:
+            continue
+        entity_suggestions.append(
+            {
+                "entity_id": e.get("entity_id"),
+                "domain": domain,
+                "noise_score": score,
+                "risk_level": risk_for_entity(score),
+                "reason": "High attribute churn can inflate recorder/logbook volume.",
+            }
+        )
+
+    domain_suggestions = []
+    for d in top_domains:
+        score = int(d.get("noise_score", 0))
+        domain = d.get("domain")
+        if domain in {"binary_sensor", "sensor"}:
+            continue
+        if score < 10000:
+            continue
+        domain_suggestions.append(
+            {
+                "domain": domain,
+                "noise_score": score,
+                "risk_level": "review" if score < 25000 else "aggressive",
+                "reason": "Domain-level recorder churn appears elevated.",
+            }
+        )
 
     yaml_preview = {
         "recorder": {
             "exclude": {
-                "entities": suggested_exclude_entities,
-                "domains": suggested_exclude_domains,
+                "entities": [e["entity_id"] for e in entity_suggestions],
+                "domains": [d["domain"] for d in domain_suggestions],
             }
         }
     }
 
     return {
-        "suggested_exclude_entities": suggested_exclude_entities,
-        "suggested_exclude_domains": suggested_exclude_domains,
+        "entity_suggestions": entity_suggestions,
+        "domain_suggestions": domain_suggestions,
         "yaml_preview": yaml_preview,
-        "note": "Review manually before applying; exclude only non-critical high-churn telemetry.",
+        "note": "Review manually before applying; avoid excluding critical control/security entities.",
     }

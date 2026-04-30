@@ -4,6 +4,8 @@ const I18N = {
     topNoisy: "Top noisy entities",
     recommendations: "Recommendations",
     recorderAdvice: "Recorder advice",
+    copyYaml: "Copy YAML",
+    copied: "Copied",
     entities: "Entities",
     unavailable: "Unavailable/Unknown",
     lowBattery: "Low battery",
@@ -16,6 +18,8 @@ const I18N = {
     topNoisy: "Entitäten mit hoher Last",
     recommendations: "Empfehlungen",
     recorderAdvice: "Recorder-Hinweise",
+    copyYaml: "YAML kopieren",
+    copied: "Kopiert",
     entities: "Entitäten",
     unavailable: "Nicht verfügbar/Unbekannt",
     lowBattery: "Niedriger Batteriestand",
@@ -52,6 +56,9 @@ class HaContextExplorerNextPanel extends HTMLElement {
           </div>
           <div>
             <h3>${t(this._lang, "recorderAdvice")}</h3>
+            <button id="copyYamlBtn" type="button">${t(this._lang, "copyYaml")}</button>
+            <div id="copyState" style="font-size:12px;color:var(--secondary-text-color);"></div>
+            <table id="recorderTable" style="width:100%;border-collapse:collapse;"></table>
             <pre id="recorder"></pre>
           </div>
           <div>
@@ -93,7 +100,22 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .map((item) => `<li>${item.entity_id} — ${t(this._lang, "score")} ${item.noise_score}</li>`)
         .join("");
 
-      this.querySelector("#recorder").textContent = JSON.stringify(payload.recorder_advice || {}, null, 2);
+      const recorderAdvice = payload.recorder_advice || {};
+      this.querySelector("#recorder").textContent = JSON.stringify(recorderAdvice.yaml_preview || {}, null, 2);
+
+      const rows = (recorderAdvice.entity_suggestions || []).slice(0, 8)
+        .map((r) => `<tr><td>${r.entity_id}</td><td>${r.noise_score}</td><td>${r.risk_level}</td></tr>`)
+        .join("");
+      this.querySelector("#recorderTable").innerHTML = `<thead><tr><th>Entity</th><th>Score</th><th>Risk</th></tr></thead><tbody>${rows}</tbody>`;
+
+      this.querySelector("#copyYamlBtn").onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(this.querySelector("#recorder").textContent || "");
+          this.querySelector("#copyState").textContent = t(this._lang, "copied");
+        } catch (e) {
+          this.querySelector("#copyState").textContent = `${t(this._lang, "error")}: ${e}`;
+        }
+      };
 
       this.querySelector("#recs").innerHTML = (payload.recommendations || [])
         .map((rec) => this._rec(rec))
