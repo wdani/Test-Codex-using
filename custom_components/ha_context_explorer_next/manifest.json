@@ -1,0 +1,12 @@
+{
+  "domain": "ha_context_explorer_next",
+  "name": "HA Context Explorer Next",
+  "version": "0.1.0",
+  "documentation": "https://github.com/wdani/ha-context-explorer",
+  "issue_tracker": "https://github.com/wdani/ha-context-explorer/issues",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@wdani"],
+  "iot_class": "local_polling",
+  "config_flow": true
+}
