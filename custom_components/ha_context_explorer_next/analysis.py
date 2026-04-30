@@ -164,3 +164,36 @@ def generate_recommendations(
 
     recs.sort(key=lambda r: severity_order.get(r["severity"], 99))
     return recs
+
+
+def build_recorder_advice(noise_summary: dict[str, Any]) -> dict[str, Any]:
+    top_entities = noise_summary.get("top_noisy_entities", [])[:10]
+    top_domains = noise_summary.get("top_noisy_domains", [])[:5]
+
+    suggested_exclude_entities = [
+        e["entity_id"]
+        for e in top_entities
+        if e.get("noise_score", 0) >= 2500 and e.get("domain") not in {"alarm_control_panel", "lock"}
+    ][:8]
+
+    suggested_exclude_domains = [
+        d["domain"]
+        for d in top_domains
+        if d.get("noise_score", 0) >= 10000 and d.get("domain") not in {"binary_sensor", "sensor"}
+    ][:4]
+
+    yaml_preview = {
+        "recorder": {
+            "exclude": {
+                "entities": suggested_exclude_entities,
+                "domains": suggested_exclude_domains,
+            }
+        }
+    }
+
+    return {
+        "suggested_exclude_entities": suggested_exclude_entities,
+        "suggested_exclude_domains": suggested_exclude_domains,
+        "yaml_preview": yaml_preview,
+        "note": "Review manually before applying; exclude only non-critical high-churn telemetry.",
+    }

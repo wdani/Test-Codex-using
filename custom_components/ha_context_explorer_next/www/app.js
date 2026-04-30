@@ -3,6 +3,7 @@ const I18N = {
     title: "HA Context Explorer Next",
     topNoisy: "Top noisy entities",
     recommendations: "Recommendations",
+    recorderAdvice: "Recorder advice",
     entities: "Entities",
     unavailable: "Unavailable/Unknown",
     lowBattery: "Low battery",
@@ -14,6 +15,7 @@ const I18N = {
     title: "HA Context Explorer Next",
     topNoisy: "Entitäten mit hoher Last",
     recommendations: "Empfehlungen",
+    recorderAdvice: "Recorder-Hinweise",
     entities: "Entitäten",
     unavailable: "Nicht verfügbar/Unbekannt",
     lowBattery: "Niedriger Batteriestand",
@@ -47,6 +49,10 @@ class HaContextExplorerNextPanel extends HTMLElement {
           <div>
             <h3>${t(this._lang, "topNoisy")}</h3>
             <ul id="noise"></ul>
+          </div>
+          <div>
+            <h3>${t(this._lang, "recorderAdvice")}</h3>
+            <pre id="recorder"></pre>
           </div>
           <div>
             <h3>${t(this._lang, "recommendations")}</h3>
@@ -86,6 +92,8 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this.querySelector("#noise").innerHTML = topNoise
         .map((item) => `<li>${item.entity_id} — ${t(this._lang, "score")} ${item.noise_score}</li>`)
         .join("");
+
+      this.querySelector("#recorder").textContent = JSON.stringify(payload.recorder_advice || {}, null, 2);
 
       this.querySelector("#recs").innerHTML = (payload.recommendations || [])
         .map((rec) => this._rec(rec))

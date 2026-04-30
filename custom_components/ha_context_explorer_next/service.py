@@ -6,9 +6,11 @@ from .analysis import (
     build_battery_summary,
     build_entity_activity_summary,
     build_noise_summary,
+    build_recorder_advice,
     generate_recommendations,
 )
 from .exporter import build_ai_context_bundle
+from .privacy import mask_payload
 
 
 def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
@@ -16,21 +18,24 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     noise = build_noise_summary(states)
     battery = build_battery_summary(states)
     recommendations = generate_recommendations(summary, noise, battery)
+    recorder_advice = build_recorder_advice(noise)
     return {
         "summary": summary,
         "noise": noise,
         "battery": battery,
         "recommendations": recommendations,
+        "recorder_advice": recorder_advice,
     }
 
 
 def build_ai_export_payload(states: list[Any]) -> dict[str, Any]:
-    snapshot = build_snapshot_payload(states)
+    snapshot = mask_payload(build_snapshot_payload(states))
     return build_ai_context_bundle(
         snapshot["summary"],
         snapshot["noise"],
         snapshot["battery"],
         snapshot["recommendations"],
+        snapshot["recorder_advice"],
     )
 
 
