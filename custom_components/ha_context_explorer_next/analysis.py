@@ -88,10 +88,20 @@ def build_battery_summary(states: list[Any]) -> dict[str, Any]:
     }
 
 
-def _rec(id_: str, severity: str, title: str, detail: str, next_action: str) -> dict[str, str]:
+def _rec(
+    id_: str,
+    severity: str,
+    title: str,
+    detail: str,
+    next_action: str,
+    category: str,
+    confidence: float,
+) -> dict[str, Any]:
     return {
         "id": id_,
         "severity": severity,
+        "category": category,
+        "confidence": confidence,
         "title": title,
         "detail": detail,
         "next_action": next_action,
@@ -111,6 +121,8 @@ def generate_recommendations(
                 "Review unavailable entities",
                 "Some entities are unavailable/unknown; check connectivity, power, and integration health.",
                 "Open entities view and inspect unavailable devices/integrations first.",
+                "availability",
+                0.75,
             )
         )
 
@@ -122,6 +134,8 @@ def generate_recommendations(
                 "Recorder optimization suggested",
                 "Large installations benefit from include/exclude tuning and purge strategy.",
                 "Review recorder include/exclude and verify purge retention settings.",
+                "recorder",
+                0.8,
             )
         )
 
@@ -133,6 +147,8 @@ def generate_recommendations(
                 "Low battery devices detected",
                 "Low battery entities were detected; replace/recharge soon to avoid automation instability.",
                 "Replace/recharge low battery devices in the next maintenance window.",
+                "battery",
+                0.9,
             )
         )
 
@@ -146,6 +162,8 @@ def generate_recommendations(
                 "High-noise entities identified",
                 "Review top noisy entities to reduce recorder churn and excess log verbosity.",
                 "Exclude non-essential high-noise entities from recorder/logbook.",
+                "noise",
+                0.7,
             )
         )
 
@@ -159,6 +177,8 @@ def generate_recommendations(
                 "No immediate issues detected",
                 "Current baseline looks healthy for this quick pass.",
                 "Keep monitoring weekly and revisit after major integration changes.",
+                "baseline",
+                0.6,
             )
         )
 

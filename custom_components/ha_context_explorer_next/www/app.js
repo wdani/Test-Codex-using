@@ -141,7 +141,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
   }
 
   _rec(rec) {
-    return `<div class="card"><b>[${rec.severity.toUpperCase()}] ${rec.title}</b><div>${rec.detail}</div><small><b>${t(this._lang, "next")}:</b> ${rec.next_action || "-"}</small></div>`;
+    return `<div class="card"><b>[${rec.severity.toUpperCase()}] ${rec.title}</b><div>${rec.detail}</div><small>category=${rec.category || "general"}, confidence=${rec.confidence ?? "-"}</small><br><small><b>${t(this._lang, "next")}:</b> ${rec.next_action || "-"}</small></div>`;
   }
 
   _sortRows(rows) {
@@ -180,11 +180,17 @@ class HaContextExplorerNextPanel extends HTMLElement {
   async _loadExport() {
     const level = this._exportLevel;
     const path = `ha_context_explorer_next/export/ai_context/${level}`;
-    const payload = await this._hass.callApi("GET", path);
-    this._exportPayload = payload;
-    const firstCount = payload?.action_queue?.do_first?.length || 0;
-    this.querySelector("#exportHint").textContent = `level=${level}, do_first=${firstCount}`;
-    this.querySelector("#exportPreview").textContent = JSON.stringify(payload, null, 2);
+    try {
+      const payload = await this._hass.callApi("GET", path);
+      this._exportPayload = payload;
+      const firstCount = payload?.action_queue?.do_first?.length || 0;
+      this.querySelector("#exportHint").textContent = `level=${level}, do_first=${firstCount}`;
+      this.querySelector("#exportPreview").textContent = JSON.stringify(payload, null, 2);
+    } catch (err) {
+      this._exportPayload = null;
+      this.querySelector("#exportHint").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
+      this.querySelector("#exportPreview").textContent = "{}";
+    }
   }
 
   async load() {

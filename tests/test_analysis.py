@@ -61,3 +61,11 @@ def test_generate_recommendations_noise_only_when_score_high():
     high_noise = {"top_noisy_entities": [{"noise_score": 5000}]}
     recs_high = analysis.generate_recommendations(summary, high_noise, battery)
     assert any(r["id"] == "noise-hotspots" for r in recs_high)
+
+
+def test_recommendation_includes_category_and_confidence():
+    summary = {"entities_total": 600, "entities_unavailable_or_unknown": 3}
+    noise = {"top_noisy_entities": [{"noise_score": 4000}]}
+    battery = {"battery_entities_low": 1}
+    recs = analysis.generate_recommendations(summary, noise, battery)
+    assert all("category" in r and "confidence" in r for r in recs)

@@ -18,7 +18,9 @@ def _build_action_queue(recommendations: list[dict[str, str]]) -> dict[str, list
             "title": rec["title"],
             "reason": rec["detail"],
             "impact": "high" if rec["severity"] == "high" else "medium",
-            "estimated_effort": "medium",
+            "estimated_effort": "low" if rec["severity"] == "low" else "high" if rec["severity"] == "high" else "medium",
+            "category": rec.get("category", "general"),
+            "confidence": rec.get("confidence", 0.5),
             "next_action": rec.get("next_action", ""),
         }
         if rec["severity"] == "high":
