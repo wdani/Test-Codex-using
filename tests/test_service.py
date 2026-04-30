@@ -38,7 +38,7 @@ def test_build_snapshot_payload_shape():
 
 def test_build_ai_export_payload_contains_sections():
     export = service.build_ai_export_payload([_state("sensor.temp", "20")])
-    assert export["schema_version"] == "1.2.0"
+    assert export["schema_version"] == "2.0.0"
     assert "summary" in export and "noise" in export and "battery" in export
     assert "recorder_advice" in export
 
@@ -53,3 +53,10 @@ def test_recorder_advice_contains_yaml_preview():
     advice = payload["recorder_advice"]
     assert "yaml_preview" in advice
     assert "recorder" in advice["yaml_preview"]
+
+
+def test_export_contains_action_queue_and_llm_context():
+    export = service.build_ai_export_payload([_state("sensor.temp", "20")])
+    assert "action_queue" in export
+    assert "llm_context_short" in export
+    assert "llm_context_deep" in export

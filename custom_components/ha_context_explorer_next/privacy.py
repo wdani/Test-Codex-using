@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
 import re
 from typing import Any
 
 IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 MAC_RE = re.compile(r"\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\b")
+DEFAULT_MASK_KEY = "ha_context_explorer_next_default_mask_key"
+
+
+def _mask_key() -> bytes:
+    return os.getenv("HCX_MASK_KEY", DEFAULT_MASK_KEY).encode("utf-8")
 
 
 def stable_mask(value: str, prefix: str = "masked") -> str:
-    digest = hashlib.sha1(value.encode("utf-8")).hexdigest()[:8]
+    digest = hmac.new(_mask_key(), value.encode("utf-8"), hashlib.sha256).hexdigest()[:10]
     return f"{prefix}_{digest}"
 
 
