@@ -21,6 +21,7 @@ const I18N = {
     copyShort: "Copy LLM short",
     copyFirst: "Copy do_first",
     domainHealth: "Domain health matrix",
+    keyHint: "Set HCX_MASK_KEY to enable export endpoints.",
   },
   de: {
     title: "HA Context Explorer Next",
@@ -44,6 +45,7 @@ const I18N = {
     copyShort: "LLM Kurzkontext kopieren",
     copyFirst: "do_first kopieren",
     domainHealth: "Domain-Gesundheitsmatrix",
+    keyHint: "Setze HCX_MASK_KEY, um Export-Endpunkte zu aktivieren.",
   },
 };
 
@@ -163,6 +165,18 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .join("")}</tbody>`;
   }
 
+
+
+  _formatError(err) {
+    if (!err) return "unknown error";
+    const status = err?.status_code || err?.status || err?.code;
+    const msg = err?.body?.message || err?.message || String(err);
+    if (status === 412 || msg.includes("HCX_MASK_KEY")) {
+      return `${msg} (${t(this._lang, "keyHint")})`;
+    }
+    return msg;
+  }
+
   async _loadExport() {
     const level = this._exportLevel;
     const path = `ha_context_explorer_next/export/ai_context/${level}`;
@@ -234,7 +248,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
           await navigator.clipboard.writeText(text);
           this.querySelector("#exportCopyState").textContent = t(this._lang, "copied");
         } catch (e) {
-          this.querySelector("#exportCopyState").textContent = `${t(this._lang, "error")}: ${e}`;
+          this.querySelector("#exportCopyState").textContent = `${t(this._lang, "error")}: ${this._formatError(e)}`;
         }
       };
 
@@ -247,7 +261,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
       this.querySelector("#recs").innerHTML = (payload.recommendations || []).map((rec) => this._rec(rec)).join("");
     } catch (err) {
-      this.innerHTML = `<ha-card><div style="padding:16px">${t(this._lang, "error")}: ${err}</div></ha-card>`;
+      this.innerHTML = `<ha-card><div style="padding:16px">${t(this._lang, "error")}: ${this._formatError(err)}</div></ha-card>`;
     }
   }
 }

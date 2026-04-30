@@ -96,3 +96,14 @@ def test_domain_health_uses_all_domains_not_top10_only():
     states = [_state(f"domain{i}.x", "on") for i in range(12)]
     payload = service.build_snapshot_payload(states)
     assert len(payload["domain_health"]) >= 12
+
+
+def test_domain_health_noise_not_limited_to_top10_domains():
+    states = []
+    for i in range(12):
+        attrs = {"blob": "x" * (1000 + i * 10)}
+        states.append(_state(f"d{i}.entity", "on", attrs))
+    payload = service.build_snapshot_payload(states)
+    by_domain = {d["domain"]: d for d in payload["domain_health"]}
+    assert "d11" in by_domain
+    assert by_domain["d11"]["noise_score"] > 0
