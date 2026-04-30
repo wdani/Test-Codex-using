@@ -17,6 +17,7 @@ def _module_path() -> str:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     state = hass.data.setdefault(DOMAIN, {})
+    state["enabled"] = True
 
     if not state.get("static_registered"):
         await hass.http.async_register_static_paths(
@@ -53,4 +54,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok and state.get("panel_registered"):
         async_remove_panel(hass, PANEL_URL.strip("/"))
         state["panel_registered"] = False
+    if unload_ok:
+        state["enabled"] = False
     return unload_ok

@@ -136,7 +136,9 @@ def generate_recommendations(
             )
         )
 
-    if noise_summary.get("top_noisy_entities"):
+    top_noise = noise_summary.get("top_noisy_entities", [])
+    max_noise_score = int(top_noise[0].get("noise_score", 0)) if top_noise else 0
+    if max_noise_score >= 1500:
         recs.append(
             _rec(
                 "noise-hotspots",
