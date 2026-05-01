@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import os
 import re
+import secrets
 from collections import Counter
 from typing import Any
 
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 MAC_RE = re.compile(r"\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\b")
-IPV6_RE = re.compile(r"\b(?=[0-9A-Fa-f:]{3,39}\b)(?=(?:[0-9A-Fa-f]*:){2})[0-9A-Fa-f:]+\b")
+IPV6_RE = re.compile(r"(?<![0-9A-Fa-f:])(?=[0-9A-Fa-f:]{3,39}(?![0-9A-Fa-f:]))(?=(?:[0-9A-Fa-f]*:){2})[0-9A-Fa-f:]+")
 DEFAULT_MASK_KEY = "ha_context_explorer_next_default_mask_key"
 MASKED_TEXT_PATTERNS = ("email", "ipv4", "ipv6", "mac")
 TEXT_PATTERN_RULES = (
@@ -49,20 +51,55 @@ SENSITIVE_KEY_HINTS = (
 )
 
 
-def _mask_key() -> bytes:
-    return os.getenv("HCX_MASK_KEY", DEFAULT_MASK_KEY).encode("utf-8")
+def generate_mask_key() -> str:
+    return secrets.token_urlsafe(32)
 
 
-def stable_mask(value: str, prefix: str = "masked") -> str:
-    digest = hmac.new(_mask_key(), value.encode("utf-8"), hashlib.sha256).hexdigest()[:10]
+def environment_mask_key() -> str | None:
+    value = os.getenv("HCX_MASK_KEY")
+    if value in {None, "", DEFAULT_MASK_KEY}:
+        return None
+    return value
+
+
+def key_fingerprint(mask_key: str | None) -> str | None:
+    if not mask_key:
+        return None
+    return hashlib.sha256(mask_key.encode("utf-8")).hexdigest()[:12]
+
+
+def _effective_mask_key(mask_key: str | None = None) -> str:
+    return mask_key or environment_mask_key() or DEFAULT_MASK_KEY
+
+
+def _mask_key(mask_key: str | None = None) -> bytes:
+    return _effective_mask_key(mask_key).encode("utf-8")
+
+
+def _is_ipv6(value: str) -> bool:
+    try:
+        return isinstance(ipaddress.ip_address(value), ipaddress.IPv6Address)
+    except ValueError:
+        return False
+
+
+def _iter_text_pattern_matches(name: str, regex: re.Pattern[str], value: str) -> list[re.Match[str]]:
+    matches = list(regex.finditer(value))
+    if name != "ipv6":
+        return matches
+    return [match for match in matches if _is_ipv6(match.group(0))]
+
+
+def stable_mask(value: str, prefix: str = "masked", mask_key: str | None = None) -> str:
+    digest = hmac.new(_mask_key(mask_key), value.encode("utf-8"), hashlib.sha256).hexdigest()[:10]
     return f"{prefix}_{digest}"
 
 
-def mask_text(value: str) -> str:
-    value = EMAIL_RE.sub(lambda m: stable_mask(m.group(0), "email"), value)
-    value = IPV4_RE.sub(lambda m: stable_mask(m.group(0), "ip"), value)
-    value = MAC_RE.sub(lambda m: stable_mask(m.group(0), "mac"), value)
-    value = IPV6_RE.sub(lambda m: stable_mask(m.group(0), "ip6"), value)
+def mask_text(value: str, mask_key: str | None = None) -> str:
+    value = EMAIL_RE.sub(lambda m: stable_mask(m.group(0), "email", mask_key), value)
+    value = IPV4_RE.sub(lambda m: stable_mask(m.group(0), "ip", mask_key), value)
+    value = MAC_RE.sub(lambda m: stable_mask(m.group(0), "mac", mask_key), value)
+    value = IPV6_RE.sub(lambda m: stable_mask(m.group(0), "ip6", mask_key) if _is_ipv6(m.group(0)) else m.group(0), value)
     return value
 
 
@@ -70,7 +107,7 @@ def _text_pattern_counts(value: str) -> Counter[str]:
     counts: Counter[str] = Counter()
     remaining = value
     for name, regex in TEXT_PATTERN_RULES:
-        matches = list(regex.finditer(remaining))
+        matches = _iter_text_pattern_matches(name, regex, remaining)
         if matches:
             counts[name] += len(matches)
             chars = list(remaining)
@@ -80,16 +117,16 @@ def _text_pattern_counts(value: str) -> Counter[str]:
     return counts
 
 
-def _mask_exact_text_pattern(value: str) -> str | None:
+def _mask_exact_text_pattern(value: str, mask_key: str | None = None) -> str | None:
     stripped = value.strip()
     if EMAIL_RE.fullmatch(stripped):
-        return stable_mask(stripped, "email")
+        return stable_mask(stripped, "email", mask_key)
     if IPV4_RE.fullmatch(stripped):
-        return stable_mask(stripped, "ip")
+        return stable_mask(stripped, "ip", mask_key)
     if MAC_RE.fullmatch(stripped):
-        return stable_mask(stripped, "mac")
-    if IPV6_RE.fullmatch(stripped):
-        return stable_mask(stripped, "ip6")
+        return stable_mask(stripped, "mac", mask_key)
+    if IPV6_RE.fullmatch(stripped) and _is_ipv6(stripped):
+        return stable_mask(stripped, "ip6", mask_key)
     return None
 
 
@@ -112,16 +149,16 @@ def _mask_prefix_for_key(key: Any) -> str | None:
     return "identity"
 
 
-def _mask_sensitive_value(value: Any, prefix: str) -> Any:
+def _mask_sensitive_value(value: Any, prefix: str, mask_key: str | None = None) -> Any:
     if isinstance(value, str):
-        return _mask_exact_text_pattern(value) or stable_mask(value, prefix)
+        return _mask_exact_text_pattern(value, mask_key) or stable_mask(value, prefix, mask_key)
     if isinstance(value, (int, float, bool)) or value is None:
-        return stable_mask(str(value), prefix)
+        return stable_mask(str(value), prefix, mask_key)
     if isinstance(value, list):
-        return [_mask_sensitive_value(v, prefix) for v in value]
+        return [_mask_sensitive_value(v, prefix, mask_key) for v in value]
     if isinstance(value, dict):
-        return {k: _mask_sensitive_value(v, prefix) for k, v in value.items()}
-    return stable_mask(str(value), prefix)
+        return {k: _mask_sensitive_value(v, prefix, mask_key) for k, v in value.items()}
+    return stable_mask(str(value), prefix, mask_key)
 
 
 def _value_type(value: Any) -> str:
@@ -219,28 +256,44 @@ def build_privacy_coverage(states: list[Any]) -> dict[str, Any]:
     }
 
 
-def mask_payload(value: Any) -> Any:
+def mask_payload(value: Any, mask_key: str | None = None) -> Any:
     if isinstance(value, str):
-        return mask_text(value)
+        return mask_text(value, mask_key)
     if isinstance(value, list):
-        return [mask_payload(v) for v in value]
+        return [mask_payload(v, mask_key) for v in value]
     if isinstance(value, dict):
         masked: dict[Any, Any] = {}
         for key, item in value.items():
             prefix = _mask_prefix_for_key(key)
-            masked[key] = _mask_sensitive_value(item, prefix) if prefix else mask_payload(item)
+            masked[key] = _mask_sensitive_value(item, prefix, mask_key) if prefix else mask_payload(item, mask_key)
         return masked
     return value
 
 
-def has_custom_mask_key() -> bool:
-    return os.getenv("HCX_MASK_KEY") not in {None, "", DEFAULT_MASK_KEY}
+def has_custom_mask_key(mask_key: str | None = None) -> bool:
+    return _effective_mask_key(mask_key) != DEFAULT_MASK_KEY
 
 
-def build_privacy_status(coverage: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_privacy_status(
+    coverage: dict[str, Any] | None = None,
+    mask_key: str | None = None,
+    key_source: str | None = None,
+    key_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    effective_key = _effective_mask_key(mask_key)
+    exports_enabled = effective_key != DEFAULT_MASK_KEY
+    source = key_source or ("environment" if environment_mask_key() else "missing")
+    metadata = key_metadata or {}
     return {
-        "exports_enabled": has_custom_mask_key(),
-        "mask_key": "custom" if has_custom_mask_key() else "missing",
+        "exports_enabled": exports_enabled,
+        "mask_key": "custom" if exports_enabled else "missing",
+        "key_source": source,
+        "key_managed": source == "managed_storage",
+        "key_fingerprint": key_fingerprint(effective_key) if exports_enabled else None,
+        "key_created_at": metadata.get("created_at"),
+        "key_rotated_at": metadata.get("rotated_at"),
+        "backup_available": exports_enabled,
+        "rotation_available": source == "managed_storage",
         "masked_text_patterns": list(MASKED_TEXT_PATTERNS),
         "sensitive_key_hints": list(SENSITIVE_KEY_HINTS),
         "coverage": coverage or {

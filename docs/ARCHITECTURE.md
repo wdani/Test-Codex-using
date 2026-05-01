@@ -34,11 +34,13 @@
 
 ## Privacy model
 
-- Export payloads require a non-default `HCX_MASK_KEY`.
+- Export payloads use a managed Home Assistant storage mask key generated on first setup.
+- `HCX_MASK_KEY` remains available as a development override and takes precedence while set.
 - Masking is deterministic, so the same sensitive value keeps the same pseudonym inside an export.
 - Text masking covers IP addresses, MAC addresses, and email addresses.
 - Sensitive Home Assistant attribute values are masked by key hints, including friendly names, exact location, host/network identifiers, serial-like identifiers, and user/person fields.
 - Privacy coverage scans state and attribute metadata for maskable keys and text patterns, then returns counters only.
+- Admin-only key backup and rotation endpoints expose the raw key only in the deliberate backup payload.
 
 ## UI workbenches
 
@@ -46,6 +48,7 @@
 - Battery health shows critical/low/watch/unknown counts and the highest-risk maintenance rows.
 - Recorder/logbook volume shows likely database/logbook hotspots and estimated daily state volume.
 - Privacy/export status shows whether export endpoints are unlocked and how many sensitive signals were detected.
+- Privacy key actions let admins download a backup key and rotate the managed key.
 - Export workbench loads short/deep AI payloads and supports copying targeted slices.
 - Diagnostics workbench loads and copies the admin diagnostics payload for support handovers.
 

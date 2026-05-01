@@ -19,7 +19,12 @@ from .privacy import build_privacy_coverage, build_privacy_status, has_custom_ma
 EXPORT_LEVELS = {"short", "deep"}
 
 
-def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
+def build_snapshot_payload(
+    states: list[Any],
+    mask_key: str | None = None,
+    key_source: str | None = None,
+    key_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     summary = build_entity_activity_summary(states)
     noise = build_noise_summary(states)
     battery = build_battery_summary(states)
@@ -27,7 +32,7 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     recommendations = generate_recommendations(summary, noise, battery, recorder_volume)
     recorder_advice = build_recorder_advice(noise)
     domain_health = build_domain_health(states, noise)
-    privacy = build_privacy_status(build_privacy_coverage(states))
+    privacy = build_privacy_status(build_privacy_coverage(states), mask_key, key_source, key_metadata)
     return {
         "summary": summary,
         "noise": noise,
@@ -40,11 +45,17 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     }
 
 
-def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str, Any]:
+def build_ai_export_payload(
+    states: list[Any],
+    level: str = "deep",
+    mask_key: str | None = None,
+    key_source: str | None = None,
+    key_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     level = level if level in EXPORT_LEVELS else "deep"
-    if not has_custom_mask_key():
-        raise ValueError("HCX_MASK_KEY must be set for export")
-    snapshot = mask_payload(build_snapshot_payload(states))
+    if not has_custom_mask_key(mask_key):
+        raise ValueError("Privacy mask key must be available for export")
+    snapshot = mask_payload(build_snapshot_payload(states, mask_key, key_source, key_metadata), mask_key)
 
     bundle = build_ai_context_bundle(
         snapshot["summary"],
@@ -77,8 +88,13 @@ def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str,
     return bundle
 
 
-def build_diagnostics_payload(states: list[Any]) -> dict[str, Any]:
-    snapshot = build_snapshot_payload(states)
+def build_diagnostics_payload(
+    states: list[Any],
+    mask_key: str | None = None,
+    key_source: str | None = None,
+    key_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    snapshot = build_snapshot_payload(states, mask_key, key_source, key_metadata)
     privacy = snapshot["privacy"]
     exports_enabled = bool(privacy.get("exports_enabled"))
     return {
@@ -97,6 +113,9 @@ def build_diagnostics_payload(states: list[Any]) -> dict[str, Any]:
             "recorder_advice",
             "recommendations",
             "privacy_masking",
+            "managed_privacy_key",
+            "privacy_key_backup",
+            "privacy_key_rotation",
             "recorder_volume",
             "ai_export_short",
             "ai_export_deep",
@@ -105,7 +124,7 @@ def build_diagnostics_payload(states: list[Any]) -> dict[str, Any]:
         "export": {
             "enabled": exports_enabled,
             "levels": sorted(EXPORT_LEVELS),
-            "blocked_reason": None if exports_enabled else "HCX_MASK_KEY missing",
+            "blocked_reason": None if exports_enabled else "Privacy mask key missing",
         },
         "counts": {
             "entities_total": snapshot["summary"].get("entities_total", 0),
@@ -120,7 +139,7 @@ def build_diagnostics_payload(states: list[Any]) -> dict[str, Any]:
         "top_domains": snapshot["summary"].get("top_domains", []),
         "developer_notes": [
             "Diagnostics is admin-only and intended for support, UI debugging, and Codex handover context.",
-            "AI exports remain blocked until HCX_MASK_KEY is set to a non-default value.",
+            "AI exports use the managed privacy key unless HCX_MASK_KEY overrides it for development.",
             "Masking is deterministic so repeated sensitive values keep stable pseudonyms.",
         ],
     }

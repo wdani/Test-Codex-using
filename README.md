@@ -33,10 +33,9 @@ Local setup and Windows Git line-ending guidance live in [`docs/DEVELOPMENT.md`]
 
 ## Privacy key configuration
 
-For production-like usage, set a unique mask key so deterministic masking tokens are not derived from the default fallback key.
+The integration creates a strong local mask key automatically on setup and stores it in Home Assistant storage. This unlocks masked AI exports without requiring beginners to set environment variables manually.
 
-- environment variable: `HCX_MASK_KEY`
-- effect: used by `stable_mask` keyed HMAC digest
+The optional environment variable `HCX_MASK_KEY` still works as a development override. When set, it becomes the active key until removed.
 
 Example:
 
@@ -44,7 +43,15 @@ Example:
 export HCX_MASK_KEY="replace-with-a-long-random-secret"
 ```
 
-Exports stay locked until `HCX_MASK_KEY` is set to a non-default value. The normal summary endpoint still works without the key and reports export readiness in its `privacy` section.
+The normal summary endpoint reports export readiness, key source, and key fingerprint in its `privacy` section.
+
+The panel provides admin-only privacy key actions:
+
+- download a JSON backup of the active mask key
+- rotate the managed key when old and new exports no longer need stable aliases
+- see the key source and a non-secret fingerprint without exposing the key itself
+
+Keep key backups outside Git. Reusing the same key keeps masked aliases stable across exports.
 
 Current deterministic masking covers:
 
