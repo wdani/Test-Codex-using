@@ -13,7 +13,8 @@
 ## API surfaces
 
 - `/api/ha_context_explorer_next/summary`: read-only analyzer snapshot, including privacy/export status.
-- `/api/ha_context_explorer_next/export/ai_context/{level}`: masked AI export, blocked until `HCX_MASK_KEY` is set.
+- `/api/ha_context_explorer_next/export/ai_context/{level}`: masked AI export using the managed privacy key.
+- `/api/ha_context_explorer_next/export/ui_context`: masked export of the user-visible panel layout and current visible rows.
 - `/api/ha_context_explorer_next/diagnostics`: compact support and Codex handover payload.
 - `/api/ha_context_explorer_next/ideas`: current product backlog ideas.
 
@@ -50,6 +51,7 @@
 - Privacy/export status shows whether export endpoints are unlocked and how many sensitive signals were detected.
 - Privacy key actions let admins download a backup key and rotate the managed key.
 - Export workbench loads short/deep AI payloads and supports copying targeted slices.
+- UI context export describes the panel reading order, controls, visible table rows, and user tasks for AI readability review.
 - Diagnostics workbench loads and copies the admin diagnostics payload for support handovers.
 
 ## Near-term roadmap

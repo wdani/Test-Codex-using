@@ -26,6 +26,7 @@ const I18N = {
     copyExport: "Copy export JSON",
     copyShort: "Copy LLM short",
     copyFirst: "Copy do_first",
+    copyUiContext: "Copy UI context",
     domainHealth: "Domain health matrix",
     keyHint: "A privacy key is created automatically; HCX_MASK_KEY only overrides it for development.",
     backupKey: "Download key backup",
@@ -77,6 +78,7 @@ const I18N = {
     copyExport: "Export-JSON kopieren",
     copyShort: "LLM Kurzkontext kopieren",
     copyFirst: "do_first kopieren",
+    copyUiContext: "UI-Kontext kopieren",
     domainHealth: "Domain-Gesundheitsmatrix",
     keyHint: "Ein Datenschutz-Schluessel wird automatisch erstellt; HCX_MASK_KEY ist nur ein Entwickler-Override.",
     backupKey: "Key-Backup laden",
@@ -197,6 +199,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
               <button id="copyExportBtn" type="button">${t(this._lang, "copyExport")}</button>
               <button id="copyShortBtn" type="button">${t(this._lang, "copyShort")}</button>
               <button id="copyFirstBtn" type="button">${t(this._lang, "copyFirst")}</button>
+              <button id="copyUiContextBtn" type="button">${t(this._lang, "copyUiContext")}</button>
               <small id="exportCopyState"></small>
             </div>
             <div class="hint" id="exportHint"></div>
@@ -324,7 +327,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
   }
 
   _setExportCopyDisabled(disabled) {
-    ["#copyExportBtn", "#copyShortBtn", "#copyFirstBtn"].forEach((selector) => {
+    ["#copyExportBtn", "#copyShortBtn", "#copyFirstBtn", "#copyUiContextBtn"].forEach((selector) => {
       const button = this.querySelector(selector);
       if (button) button.disabled = disabled;
     });
@@ -432,6 +435,15 @@ class HaContextExplorerNextPanel extends HTMLElement {
     }
   }
 
+  async _copyUiContext(copyText) {
+    try {
+      const payload = await this._hass.callApi("GET", "ha_context_explorer_next/export/ui_context");
+      await copyText(JSON.stringify(payload, null, 2));
+    } catch (err) {
+      this.querySelector("#exportCopyState").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
+    }
+  }
+
   async _loadDiagnostics() {
     this._setDiagnosticsCopyDisabled(true);
     try {
@@ -525,6 +537,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this.querySelector("#copyExportBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload, null, 2));
       this.querySelector("#copyShortBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.llm_context_short || {}, null, 2));
       this.querySelector("#copyFirstBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.action_queue?.do_first || [], null, 2));
+      this.querySelector("#copyUiContextBtn").onclick = async () => this._copyUiContext(copyText);
       this.querySelector("#loadDiagnosticsBtn").onclick = async () => this._loadDiagnostics();
       this.querySelector("#copyDiagnosticsBtn").onclick = async () => copyText(JSON.stringify(this._diagnosticsPayload || {}, null, 2));
       this._setDiagnosticsCopyDisabled(!this._diagnosticsPayload);
