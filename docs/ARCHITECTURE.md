@@ -23,6 +23,14 @@
 - Masking is deterministic, so the same sensitive value keeps the same pseudonym inside an export.
 - Text masking covers IP addresses, MAC addresses, and email addresses.
 - Sensitive Home Assistant attribute values are masked by key hints, including friendly names, exact location, host/network identifiers, serial-like identifiers, and user/person fields.
+- Privacy coverage scans state and attribute metadata for maskable keys and text patterns, then returns counters only.
+
+## UI workbenches
+
+- Summary cards show entity, availability, battery, noise, recorder, and domain-health signals.
+- Privacy/export status shows whether export endpoints are unlocked and how many sensitive signals were detected.
+- Export workbench loads short/deep AI payloads and supports copying targeted slices.
+- Diagnostics workbench loads and copies the admin diagnostics payload for support handovers.
 
 ## Near-term roadmap
 

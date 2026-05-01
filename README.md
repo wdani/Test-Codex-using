@@ -44,6 +44,7 @@ Current deterministic masking covers:
 
 - IPv4, IPv6, MAC addresses, and email addresses in text
 - sensitive attribute keys such as `friendly_name`, `latitude`, `longitude`, `host`, `ip_address`, `serial`, `ssid`, `user`, and `unique_id`
+- privacy coverage counters for detected sensitive keys and text patterns, without returning raw sensitive values
 
 ## Export levels
 
@@ -64,4 +65,4 @@ Admin-only diagnostics are available at:
 
 - `/api/ha_context_explorer_next/diagnostics`
 
-The diagnostics payload includes analyzer capabilities, export lock state, privacy mask policy metadata, entity counts, top domains, and support notes. It is intended as a compact handover payload for debugging the integration and for future Codex/UI review workflows.
+The diagnostics payload includes analyzer capabilities, export lock state, privacy mask policy metadata, privacy coverage counters, entity counts, top domains, and support notes. It is intended as a compact handover payload for debugging the integration and for future Codex/UI review workflows.

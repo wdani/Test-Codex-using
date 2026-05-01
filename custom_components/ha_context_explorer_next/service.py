@@ -13,7 +13,7 @@ from .analysis import (
 )
 from .const import DOMAIN, PANEL_MODULE_URL, PANEL_URL
 from .exporter import build_ai_context_bundle
-from .privacy import build_privacy_status, has_custom_mask_key, mask_payload
+from .privacy import build_privacy_coverage, build_privacy_status, has_custom_mask_key, mask_payload
 
 EXPORT_LEVELS = {"short", "deep"}
 
@@ -25,7 +25,7 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     recommendations = generate_recommendations(summary, noise, battery)
     recorder_advice = build_recorder_advice(noise)
     domain_health = build_domain_health(states, noise)
-    privacy = build_privacy_status()
+    privacy = build_privacy_status(build_privacy_coverage(states))
     return {
         "summary": summary,
         "noise": noise,

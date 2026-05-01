@@ -73,3 +73,41 @@ def test_privacy_status_does_not_expose_key(monkeypatch):
     assert status["exports_enabled"] is True
     assert status["mask_key"] == "custom"
     assert "super-secret-value" not in str(status)
+
+
+def test_privacy_coverage_reports_counts_without_raw_values():
+    class State:
+        entity_id = "sensor.router"
+        state = "online"
+        name = "Router"
+        attributes = {
+            "friendly_name": "Kitchen Router",
+            "ip_address": "192.168.1.10",
+            "mac": "AA:BB:CC:DD:EE:FF",
+            "support_email": "admin@example.com",
+        }
+
+    coverage = privacy.build_privacy_coverage([State()])
+    coverage_text = str(coverage)
+    assert coverage["entities_scanned"] == 1
+    assert coverage["entities_with_sensitive_signals"] == 1
+    assert coverage["sensitive_key_hits_total"] >= 3
+    assert coverage["text_pattern_hits"]["email"] == 1
+    assert coverage["text_pattern_hits"]["ipv4"] == 1
+    assert coverage["text_pattern_hits"]["mac"] == 1
+    assert "Kitchen Router" not in coverage_text
+    assert "192.168.1.10" not in coverage_text
+    assert "AA:BB:CC:DD:EE:FF" not in coverage_text
+    assert "admin@example.com" not in coverage_text
+
+
+def test_privacy_coverage_counts_mac_without_false_ipv6_hit():
+    class State:
+        entity_id = "sensor.router"
+        state = "online"
+        name = "Router"
+        attributes = {"mac": "AA:BB:CC:DD:EE:FF"}
+
+    coverage = privacy.build_privacy_coverage([State()])
+    assert coverage["text_pattern_hits"]["mac"] == 1
+    assert "ipv6" not in coverage["text_pattern_hits"]
