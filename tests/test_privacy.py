@@ -18,8 +18,46 @@ def test_mask_text_masks_ipv4_and_mac():
     assert "ip_" in masked and "mac_" in masked
 
 
+def test_mask_text_masks_email_and_ipv6():
+    masked = privacy.mask_text("admin@example.com from fe80::1ff:fe23:4567:890a")
+    assert "admin@example.com" not in masked
+    assert "fe80::1ff:fe23:4567:890a" not in masked
+    assert "email_" in masked and "ip6_" in masked
+
+
 def test_mask_payload_masks_nested_strings():
     payload = {"x": ["mac AA:BB:CC:DD:EE:FF", {"ip": "10.0.0.1"}]}
     masked = privacy.mask_payload(payload)
     assert "AA:BB:CC:DD:EE:FF" not in str(masked)
     assert "10.0.0.1" not in str(masked)
+
+
+def test_mask_payload_masks_sensitive_attribute_keys():
+    payload = {
+        "attributes": {
+            "friendly_name": "Daniel Bedroom",
+            "latitude": 47.3769,
+            "longitude": 8.5417,
+            "email": "daniel@example.com",
+            "host": "homeassistant.local",
+        }
+    }
+    masked = privacy.mask_payload(payload)
+    masked_text = str(masked)
+    assert "Daniel Bedroom" not in masked_text
+    assert "47.3769" not in masked_text
+    assert "8.5417" not in masked_text
+    assert "daniel@example.com" not in masked_text
+    assert "homeassistant.local" not in masked_text
+    assert "identity_" in masked_text
+    assert "location_" in masked_text
+    assert "email_" in masked_text
+    assert "network_" in masked_text
+
+
+def test_privacy_status_does_not_expose_key(monkeypatch):
+    monkeypatch.setenv("HCX_MASK_KEY", "super-secret-value")
+    status = privacy.build_privacy_status()
+    assert status["exports_enabled"] is True
+    assert status["mask_key"] == "custom"
+    assert "super-secret-value" not in str(status)

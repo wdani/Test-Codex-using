@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from .analysis import (
@@ -10,8 +11,9 @@ from .analysis import (
     build_recorder_advice,
     generate_recommendations,
 )
+from .const import DOMAIN, PANEL_MODULE_URL, PANEL_URL
 from .exporter import build_ai_context_bundle
-from .privacy import has_custom_mask_key, mask_payload
+from .privacy import build_privacy_status, has_custom_mask_key, mask_payload
 
 EXPORT_LEVELS = {"short", "deep"}
 
@@ -23,6 +25,7 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     recommendations = generate_recommendations(summary, noise, battery)
     recorder_advice = build_recorder_advice(noise)
     domain_health = build_domain_health(states, noise)
+    privacy = build_privacy_status()
     return {
         "summary": summary,
         "noise": noise,
@@ -30,6 +33,7 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
         "recommendations": recommendations,
         "recorder_advice": recorder_advice,
         "domain_health": domain_health,
+        "privacy": privacy,
     }
 
 
@@ -47,6 +51,7 @@ def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str,
         snapshot["recorder_advice"],
     )
     bundle["domain_health"] = snapshot["domain_health"]
+    bundle["privacy"] = snapshot["privacy"]
     bundle["export_level"] = level
 
     if level == "short":
@@ -56,12 +61,57 @@ def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str,
             "product": bundle["product"],
             "export_level": "short",
             "meta": bundle["meta"],
+            "privacy": bundle["privacy"],
             "summary": bundle["summary"],
             "action_queue": bundle["action_queue"],
             "llm_context_short": bundle["llm_context_short"],
         }
 
     return bundle
+
+
+def build_diagnostics_payload(states: list[Any]) -> dict[str, Any]:
+    snapshot = build_snapshot_payload(states)
+    privacy = snapshot["privacy"]
+    exports_enabled = bool(privacy.get("exports_enabled"))
+    return {
+        "schema_version": "1.0.0",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "product": "ha_context_explorer_next",
+        "integration": {
+            "domain": DOMAIN,
+            "panel_url": PANEL_URL,
+            "panel_module_url": PANEL_MODULE_URL,
+        },
+        "capabilities": [
+            "summary",
+            "domain_health",
+            "recorder_advice",
+            "recommendations",
+            "privacy_masking",
+            "ai_export_short",
+            "ai_export_deep",
+        ],
+        "privacy": privacy,
+        "export": {
+            "enabled": exports_enabled,
+            "levels": sorted(EXPORT_LEVELS),
+            "blocked_reason": None if exports_enabled else "HCX_MASK_KEY missing",
+        },
+        "counts": {
+            "entities_total": snapshot["summary"].get("entities_total", 0),
+            "entities_unavailable_or_unknown": snapshot["summary"].get("entities_unavailable_or_unknown", 0),
+            "battery_entities_low": snapshot["battery"].get("battery_entities_low", 0),
+            "recommendations": len(snapshot["recommendations"]),
+            "domain_health_rows": len(snapshot["domain_health"]),
+        },
+        "top_domains": snapshot["summary"].get("top_domains", []),
+        "developer_notes": [
+            "Diagnostics is admin-only and intended for support, UI debugging, and Codex handover context.",
+            "AI exports remain blocked until HCX_MASK_KEY is set to a non-default value.",
+            "Masking is deterministic so repeated sensitive values keep stable pseudonyms.",
+        ],
+    }
 
 
 def build_ideas_payload() -> dict[str, list[str]]:
@@ -72,5 +122,7 @@ def build_ideas_payload() -> dict[str, list[str]]:
             "Battery risk forecast: estimate risk windows from low battery + activity patterns.",
             "Entity naming auditor: detect inconsistent naming and suggest normalized patterns.",
             "Blueprint opportunity miner: detect repeated automation patterns for blueprint extraction.",
+            "Dev diagnostics export: capture analyzer, privacy, and UI state for support handovers.",
+            "Privacy preview: show which fields will be masked before an export is generated.",
         ]
     }

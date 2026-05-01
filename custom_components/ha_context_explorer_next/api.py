@@ -4,7 +4,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
-from .service import build_ai_export_payload, build_ideas_payload, build_snapshot_payload
+from .service import build_ai_export_payload, build_diagnostics_payload, build_ideas_payload, build_snapshot_payload
 
 
 def _integration_enabled(hass: HomeAssistant) -> bool:
@@ -93,6 +93,23 @@ class IdeasView(HomeAssistantView):
         return self.json(build_ideas_payload())
 
 
+class DiagnosticsView(HomeAssistantView):
+    url = "/api/ha_context_explorer_next/diagnostics"
+    name = "api:ha_context_explorer_next:diagnostics"
+    requires_auth = True
+
+    async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        if not _integration_enabled(hass):
+            return self.json_message("Integration disabled", status_code=503)
+
+        denied = _require_admin(self, request)
+        if denied:
+            return denied
+
+        return self.json(build_diagnostics_payload(list(hass.states.async_all())))
+
+
 def async_register_api(hass: HomeAssistant) -> None:
     state = hass.data.setdefault(DOMAIN, {})
     if state.get("api_registered"):
@@ -101,4 +118,5 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(ExportView)
     hass.http.register_view(ExportLevelView)
     hass.http.register_view(IdeasView)
+    hass.http.register_view(DiagnosticsView)
     state["api_registered"] = True

@@ -35,7 +35,7 @@ def test_build_snapshot_payload_shape():
         _state("sensor.temp", "20", {"unit_of_measurement": "°C"}),
         _state("sensor.door_battery", "19", name="Door Battery"),
     ])
-    assert set(payload.keys()) == {"summary", "noise", "battery", "recommendations", "recorder_advice", "domain_health"}
+    assert set(payload.keys()) == {"summary", "noise", "battery", "recommendations", "recorder_advice", "domain_health", "privacy"}
 
 
 def test_build_ai_export_payload_contains_sections():
@@ -62,6 +62,7 @@ def test_export_contains_action_queue_and_llm_context():
     assert "action_queue" in export
     assert "llm_context_short" in export
     assert "llm_context_deep" in export
+    assert export["privacy"]["exports_enabled"] is True
 
 
 def test_export_short_level_is_compact():
@@ -122,3 +123,18 @@ def test_export_missing_key_skips_snapshot_work(monkeypatch):
         assert False, "expected ValueError"
     except ValueError:
         assert True
+
+
+def test_snapshot_reports_export_lock_when_mask_key_missing(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    payload = service.build_snapshot_payload([_state("sensor.temp", "20")])
+    assert payload["privacy"]["exports_enabled"] is False
+    assert payload["privacy"]["mask_key"] == "missing"
+
+
+def test_diagnostics_payload_explains_export_block(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    diagnostics = service.build_diagnostics_payload([_state("sensor.temp", "20")])
+    assert diagnostics["export"]["enabled"] is False
+    assert diagnostics["export"]["blocked_reason"] == "HCX_MASK_KEY missing"
+    assert "privacy_masking" in diagnostics["capabilities"]
