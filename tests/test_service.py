@@ -35,7 +35,16 @@ def test_build_snapshot_payload_shape():
         _state("sensor.temp", "20", {"unit_of_measurement": "°C"}),
         _state("sensor.door_battery", "19", name="Door Battery"),
     ])
-    assert set(payload.keys()) == {"summary", "noise", "battery", "recommendations", "recorder_advice", "domain_health", "privacy"}
+    assert set(payload.keys()) == {
+        "summary",
+        "noise",
+        "battery",
+        "recommendations",
+        "recorder_advice",
+        "recorder_volume",
+        "domain_health",
+        "privacy",
+    }
 
 
 def test_build_ai_export_payload_contains_sections():
@@ -43,6 +52,7 @@ def test_build_ai_export_payload_contains_sections():
     assert export["schema_version"] == "2.0.0"
     assert "summary" in export and "noise" in export and "battery" in export
     assert "recorder_advice" in export
+    assert "recorder_volume" in export
 
 
 def test_build_ideas_payload_has_multiple_ideas():
@@ -140,4 +150,11 @@ def test_diagnostics_payload_explains_export_block(monkeypatch):
     assert diagnostics["export"]["enabled"] is False
     assert diagnostics["export"]["blocked_reason"] == "HCX_MASK_KEY missing"
     assert "privacy_masking" in diagnostics["capabilities"]
+    assert "recorder_volume" in diagnostics["capabilities"]
     assert diagnostics["privacy"]["coverage"]["text_pattern_hits"]["email"] == 1
+
+
+def test_recorder_volume_is_in_short_export():
+    export = service.build_ai_export_payload([_state("sensor.big", "20", {"blob": "x" * 9000})], level="short")
+    assert "recorder_volume" in export
+    assert export["recorder_volume"]["totals"]["entities_scanned"] == 1

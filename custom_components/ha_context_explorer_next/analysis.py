@@ -4,6 +4,21 @@ from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 
+HIGH_CHURN_DOMAIN_FACTORS = {
+    "sensor": 10,
+    "binary_sensor": 6,
+    "device_tracker": 8,
+    "person": 5,
+    "weather": 4,
+    "camera": 4,
+    "media_player": 4,
+    "automation": 3,
+    "script": 3,
+    "light": 2,
+    "switch": 2,
+}
+CRITICAL_CONTROL_DOMAINS = {"alarm_control_panel", "cover", "fan", "lock", "siren"}
+
 
 def _entity_domain(entity_id: str) -> str:
     return entity_id.split('.', 1)[0] if '.' in entity_id else 'unknown'
@@ -110,7 +125,10 @@ def _rec(
 
 
 def generate_recommendations(
-    summary: dict[str, Any], noise_summary: dict[str, Any], battery_summary: dict[str, Any]
+    summary: dict[str, Any],
+    noise_summary: dict[str, Any],
+    battery_summary: dict[str, Any],
+    recorder_volume: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     recs: list[dict[str, str]] = []
 
@@ -167,6 +185,21 @@ def generate_recommendations(
                 0.7,
             )
         )
+
+    if recorder_volume:
+        totals = recorder_volume.get("totals", {})
+        if int(totals.get("high_impact_entities", 0)) > 0 or int(totals.get("domains_review", 0)) > 0:
+            recs.append(
+                _rec(
+                    "recorder-volume-hotspots",
+                    "medium",
+                    "Recorder volume hotspots detected",
+                    "Some entities or domains are likely to create disproportionate recorder/logbook volume.",
+                    "Review recorder volume hotspots before adding broad include/exclude rules.",
+                    "recorder",
+                    0.72,
+                )
+            )
 
     severity_order = {"high": 0, "medium": 1, "low": 2}
 
@@ -247,6 +280,112 @@ def build_recorder_advice(noise_summary: dict[str, Any]) -> dict[str, Any]:
         "domain_suggestions": domain_suggestions,
         "yaml_preview": yaml_preview,
         "note": "Review manually before applying; avoid excluding critical control/security entities.",
+    }
+
+
+def _estimated_daily_events(domain: str, attr_keys: int, attr_chars: int) -> int:
+    factor = HIGH_CHURN_DOMAIN_FACTORS.get(domain, 2)
+    attr_weight = min(20, attr_keys // 4)
+    size_weight = min(25, attr_chars // 800)
+    return max(1, factor + attr_weight + size_weight)
+
+
+def _volume_risk(score: int) -> str:
+    if score >= 75000:
+        return "aggressive"
+    if score >= 25000:
+        return "review"
+    return "safe"
+
+
+def _volume_reason(domain: str, attr_keys: int, attr_chars: int, estimated_events: int) -> str:
+    reasons = []
+    if domain in HIGH_CHURN_DOMAIN_FACTORS:
+        reasons.append("domain commonly changes often")
+    if attr_keys >= 20:
+        reasons.append("many attributes")
+    if attr_chars >= 5000:
+        reasons.append("large attribute payload")
+    if estimated_events >= 20:
+        reasons.append("high estimated event rate")
+    return ", ".join(reasons) if reasons else "low estimated recorder/logbook impact"
+
+
+def build_recorder_volume_summary(states: list[Any], noise_summary: dict[str, Any]) -> dict[str, Any]:
+    noise_by_entity = {
+        item.get("entity_id"): int(item.get("noise_score", 0))
+        for item in noise_summary.get("top_noisy_entities", [])
+    }
+    entity_rows = []
+    domain_rows: dict[str, dict[str, Any]] = {}
+
+    for state in states:
+        entity_id = getattr(state, "entity_id", "unknown.unknown")
+        domain = _entity_domain(entity_id)
+        attrs = getattr(state, "attributes", {}) or {}
+        attr_keys = len(attrs)
+        attr_chars = sum(len(str(k)) + len(str(v)) for k, v in attrs.items())
+        state_chars = len(str(getattr(state, "state", "")))
+        estimated_events = _estimated_daily_events(domain, attr_keys, attr_chars)
+        estimated_bytes = estimated_events * max(64, len(entity_id) + state_chars + attr_chars)
+        volume_score = estimated_bytes + noise_by_entity.get(entity_id, 0)
+        risk = _volume_risk(volume_score)
+        row = {
+            "entity_id": entity_id,
+            "domain": domain,
+            "attributes_count": attr_keys,
+            "attributes_chars": attr_chars,
+            "estimated_daily_events": estimated_events,
+            "estimated_daily_state_bytes": estimated_bytes,
+            "volume_score": volume_score,
+            "risk_level": risk,
+            "reason": _volume_reason(domain, attr_keys, attr_chars, estimated_events),
+            "recommended_action": "review recorder/logbook exclusion" if risk != "safe" else "keep observed",
+        }
+        entity_rows.append(row)
+
+        domain_row = domain_rows.setdefault(
+            domain,
+            {
+                "domain": domain,
+                "entities": 0,
+                "estimated_daily_events": 0,
+                "estimated_daily_state_bytes": 0,
+                "volume_score": 0,
+                "risk_level": "safe",
+            },
+        )
+        domain_row["entities"] += 1
+        domain_row["estimated_daily_events"] += estimated_events
+        domain_row["estimated_daily_state_bytes"] += estimated_bytes
+        domain_row["volume_score"] += volume_score
+        domain_row["risk_level"] = _volume_risk(int(domain_row["volume_score"]))
+
+    entity_rows.sort(key=lambda item: int(item["volume_score"]), reverse=True)
+    domain_list = sorted(domain_rows.values(), key=lambda item: int(item["volume_score"]), reverse=True)
+    exclusion_candidates = [
+        row["entity_id"]
+        for row in entity_rows
+        if row["risk_level"] in {"review", "aggressive"} and row["domain"] not in CRITICAL_CONTROL_DOMAINS
+    ][:20]
+
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "method": "heuristic_current_state_snapshot",
+        "totals": {
+            "entities_scanned": len(states),
+            "estimated_daily_events": sum(int(row["estimated_daily_events"]) for row in entity_rows),
+            "estimated_daily_state_bytes": sum(int(row["estimated_daily_state_bytes"]) for row in entity_rows),
+            "high_impact_entities": sum(1 for row in entity_rows if row["risk_level"] != "safe"),
+            "domains_review": sum(1 for row in domain_list if row["risk_level"] != "safe"),
+        },
+        "top_entities": entity_rows[:20],
+        "top_domains": domain_list[:12],
+        "safe_exclusion_candidates": exclusion_candidates,
+        "notes": [
+            "Heuristic estimate from current states; future versions should use recorder statistics when available.",
+            "Review manually before excluding entities from recorder or logbook.",
+        ],
     }
 
 

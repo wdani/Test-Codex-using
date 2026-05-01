@@ -4,6 +4,7 @@ const I18N = {
     topNoisy: "Top noisy entities",
     recommendations: "Recommendations",
     recorderAdvice: "Recorder advice",
+    recorderVolume: "Recorder/logbook volume",
     copyYaml: "Copy YAML",
     copied: "Copied",
     entities: "Entities",
@@ -33,12 +34,16 @@ const I18N = {
     loadDiagnostics: "Load diagnostics",
     copyDiagnostics: "Copy diagnostics JSON",
     diagnosticsReady: "Diagnostics ready",
+    estimatedEvents: "Estimated events/day",
+    estimatedBytes: "Estimated bytes/day",
+    hotspots: "Hotspots",
   },
   de: {
     title: "HA Context Explorer Next",
     topNoisy: "Entitäten mit hoher Last",
     recommendations: "Empfehlungen",
     recorderAdvice: "Recorder-Hinweise",
+    recorderVolume: "Recorder/Logbook-Volumen",
     copyYaml: "YAML kopieren",
     copied: "Kopiert",
     entities: "Entitäten",
@@ -68,6 +73,9 @@ const I18N = {
     loadDiagnostics: "Diagnose laden",
     copyDiagnostics: "Diagnose-JSON kopieren",
     diagnosticsReady: "Diagnose bereit",
+    estimatedEvents: "Geschaetzte Events/Tag",
+    estimatedBytes: "Geschaetzte Bytes/Tag",
+    hotspots: "Hotspots",
   },
 };
 
@@ -131,6 +139,11 @@ class HaContextExplorerNextPanel extends HTMLElement {
             <pre id="recorder"></pre>
           </div>
           <div class="card">
+            <h3>${t(this._lang, "recorderVolume")}</h3>
+            <div class="hint" id="recorderVolumeSummary"></div>
+            <table id="recorderVolumeTable"></table>
+          </div>
+          <div class="card">
             <h3>${t(this._lang, "domainHealth")}</h3>
             <table id="domainHealthTable"></table>
           </div>
@@ -179,6 +192,13 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
   _rec(rec) {
     return `<div class="card"><b>[${rec.severity.toUpperCase()}] ${rec.title}</b><div>${rec.detail}</div><small>category=${rec.category || "general"}, confidence=${rec.confidence ?? "-"}</small><br><small><b>${t(this._lang, "next")}:</b> ${rec.next_action || "-"}</small></div>`;
+  }
+
+  _formatBytes(value) {
+    const bytes = Number(value || 0);
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+    return `${bytes} B`;
   }
 
   _escape(value) {
@@ -258,6 +278,21 @@ class HaContextExplorerNextPanel extends HTMLElement {
       const button = this.querySelector(selector);
       if (button) button.disabled = disabled;
     });
+  }
+
+  _renderRecorderVolume(volume) {
+    const totals = volume?.totals || {};
+    const rows = (volume?.top_entities || []).slice(0, 8);
+    this.querySelector("#recorderVolumeSummary").textContent =
+      `${t(this._lang, "estimatedEvents")}: ${totals.estimated_daily_events || 0}, ` +
+      `${t(this._lang, "estimatedBytes")}: ${this._formatBytes(totals.estimated_daily_state_bytes || 0)}, ` +
+      `${t(this._lang, "hotspots")}: ${totals.high_impact_entities || 0}`;
+
+    this.querySelector("#recorderVolumeTable").innerHTML = `
+      <thead><tr><th>Entity</th><th>Domain</th><th>${t(this._lang, "estimatedEvents")}</th><th>${t(this._lang, "estimatedBytes")}</th><th>${t(this._lang, "risk")}</th></tr></thead>
+      <tbody>${rows
+        .map((r) => `<tr><td>${this._escape(r.entity_id)}</td><td>${this._escape(r.domain)}</td><td>${this._escape(r.estimated_daily_events)}</td><td>${this._escape(this._formatBytes(r.estimated_daily_state_bytes))}</td><td>${this._riskBadge(r.risk_level)}</td></tr>`)
+        .join("")}</tbody>`;
   }
 
   _setDiagnosticsCopyDisabled(disabled) {
@@ -346,6 +381,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
       const recorderAdvice = payload.recorder_advice || {};
       this.querySelector("#recorder").textContent = JSON.stringify(recorderAdvice.yaml_preview || {}, null, 2);
+      this._renderRecorderVolume(payload.recorder_volume || {});
 
       const domains = ["all", ...new Set((recorderAdvice.entity_suggestions || []).map((r) => r.domain))];
       this.querySelector("#domainSelect").innerHTML = domains

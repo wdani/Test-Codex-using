@@ -9,6 +9,7 @@ from .analysis import (
     build_entity_activity_summary,
     build_noise_summary,
     build_recorder_advice,
+    build_recorder_volume_summary,
     generate_recommendations,
 )
 from .const import DOMAIN, PANEL_MODULE_URL, PANEL_URL
@@ -22,7 +23,8 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
     summary = build_entity_activity_summary(states)
     noise = build_noise_summary(states)
     battery = build_battery_summary(states)
-    recommendations = generate_recommendations(summary, noise, battery)
+    recorder_volume = build_recorder_volume_summary(states, noise)
+    recommendations = generate_recommendations(summary, noise, battery, recorder_volume)
     recorder_advice = build_recorder_advice(noise)
     domain_health = build_domain_health(states, noise)
     privacy = build_privacy_status(build_privacy_coverage(states))
@@ -32,6 +34,7 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
         "battery": battery,
         "recommendations": recommendations,
         "recorder_advice": recorder_advice,
+        "recorder_volume": recorder_volume,
         "domain_health": domain_health,
         "privacy": privacy,
     }
@@ -49,8 +52,10 @@ def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str,
         snapshot["battery"],
         snapshot["recommendations"],
         snapshot["recorder_advice"],
+        snapshot["recorder_volume"],
     )
     bundle["domain_health"] = snapshot["domain_health"]
+    bundle["recorder_volume"] = snapshot["recorder_volume"]
     bundle["privacy"] = snapshot["privacy"]
     bundle["export_level"] = level
 
@@ -63,6 +68,7 @@ def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str,
             "meta": bundle["meta"],
             "privacy": bundle["privacy"],
             "summary": bundle["summary"],
+            "recorder_volume": bundle["recorder_volume"],
             "action_queue": bundle["action_queue"],
             "llm_context_short": bundle["llm_context_short"],
         }
@@ -89,6 +95,7 @@ def build_diagnostics_payload(states: list[Any]) -> dict[str, Any]:
             "recorder_advice",
             "recommendations",
             "privacy_masking",
+            "recorder_volume",
             "ai_export_short",
             "ai_export_deep",
         ],
@@ -104,6 +111,7 @@ def build_diagnostics_payload(states: list[Any]) -> dict[str, Any]:
             "battery_entities_low": snapshot["battery"].get("battery_entities_low", 0),
             "recommendations": len(snapshot["recommendations"]),
             "domain_health_rows": len(snapshot["domain_health"]),
+            "recorder_volume_hotspots": snapshot["recorder_volume"].get("totals", {}).get("high_impact_entities", 0),
         },
         "top_domains": snapshot["summary"].get("top_domains", []),
         "developer_notes": [

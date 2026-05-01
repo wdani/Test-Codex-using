@@ -20,6 +20,7 @@ HA Context Explorer Next helps users understand:
 - Rule-based recommendations engine
 - English-first UI with i18n-ready structure
 - Admin diagnostics endpoint for support handovers and UI debugging
+- Heuristic recorder/logbook volume analysis from current state metadata
 
 ## Status
 
@@ -66,3 +67,14 @@ Admin-only diagnostics are available at:
 - `/api/ha_context_explorer_next/diagnostics`
 
 The diagnostics payload includes analyzer capabilities, export lock state, privacy mask policy metadata, privacy coverage counters, entity counts, top domains, and support notes. It is intended as a compact handover payload for debugging the integration and for future Codex/UI review workflows.
+
+## Recorder/logbook volume analysis
+
+The summary and AI export payloads include `recorder_volume`, a heuristic estimate of recorder/logbook impact built from current entity state, domain type, attribute count, and attribute payload size.
+
+It reports:
+
+- estimated events and state bytes per day
+- top entity and domain hotspots
+- safe exclusion candidates that avoid critical control/security domains
+- a clear note that the estimate should be replaced with recorder statistics when available

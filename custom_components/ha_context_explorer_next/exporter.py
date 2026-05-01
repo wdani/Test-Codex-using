@@ -38,6 +38,7 @@ def build_ai_context_bundle(
     battery_summary: dict[str, Any],
     recommendations: list[dict[str, str]],
     recorder_advice: dict[str, Any],
+    recorder_volume: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     action_queue = _build_action_queue(recommendations)
 
@@ -61,6 +62,7 @@ def build_ai_context_bundle(
         "battery": battery_summary,
         "recommendations": recommendations,
         "recorder_advice": recorder_advice,
+        "recorder_volume": recorder_volume or {},
         "action_queue": action_queue,
         "llm_context_short": {
             "high_priority_count": len(action_queue["do_first"]),
@@ -69,6 +71,7 @@ def build_ai_context_bundle(
         "llm_context_deep": {
             "top_noisy_entities": noise_summary.get("top_noisy_entities", [])[:20],
             "top_noisy_domains": noise_summary.get("top_noisy_domains", [])[:10],
+            "top_recorder_volume_entities": (recorder_volume or {}).get("top_entities", [])[:10],
             "recorder_yaml_preview": recorder_advice.get("yaml_preview", {}),
         },
         "actionable_recommendations": [
