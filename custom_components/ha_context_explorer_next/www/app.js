@@ -25,6 +25,14 @@ const I18N = {
     privacyStatus: "Privacy/export status",
     exportsReady: "Exports enabled",
     exportsLocked: "Exports locked",
+    privacyCoverage: "Privacy coverage",
+    sensitiveKeys: "Sensitive keys",
+    textPatterns: "Text patterns",
+    entitiesWithSignals: "Entities with signals",
+    diagnostics: "Diagnostics",
+    loadDiagnostics: "Load diagnostics",
+    copyDiagnostics: "Copy diagnostics JSON",
+    diagnosticsReady: "Diagnostics ready",
   },
   de: {
     title: "HA Context Explorer Next",
@@ -52,6 +60,14 @@ const I18N = {
     privacyStatus: "Datenschutz/Export-Status",
     exportsReady: "Exporte aktiv",
     exportsLocked: "Exporte gesperrt",
+    privacyCoverage: "Datenschutz-Abdeckung",
+    sensitiveKeys: "Sensitive Keys",
+    textPatterns: "Textmuster",
+    entitiesWithSignals: "Entitaeten mit Signalen",
+    diagnostics: "Diagnose",
+    loadDiagnostics: "Diagnose laden",
+    copyDiagnostics: "Diagnose-JSON kopieren",
+    diagnosticsReady: "Diagnose bereit",
   },
 };
 
@@ -89,6 +105,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .risk-review { background:#f9a82533; color:#8d6e00; }
         .risk-aggressive { background:#c6282833; color:#b71c1c; }
         .hint { font-size:12px; color:var(--secondary-text-color); }
+        pre { white-space:pre-wrap; overflow:auto; max-height:420px; }
         @media (max-width: 700px) { .kpi { min-width:unset; width:100%; } }
       </style>
       <ha-card header="${t(this._lang, "title")}">
@@ -120,6 +137,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
           <div class="card">
             <h3>${t(this._lang, "privacyStatus")}</h3>
             <div class="hint" id="privacyStatus"></div>
+            <div id="privacyCoverage"></div>
           </div>
           <div class="card">
             <h3>${t(this._lang, "exportWorkbench")}</h3>
@@ -132,6 +150,15 @@ class HaContextExplorerNextPanel extends HTMLElement {
             </div>
             <div class="hint" id="exportHint"></div>
             <pre id="exportPreview"></pre>
+          </div>
+          <div class="card">
+            <h3>${t(this._lang, "diagnostics")}</h3>
+            <div class="controls">
+              <button id="loadDiagnosticsBtn" type="button">${t(this._lang, "loadDiagnostics")}</button>
+              <button id="copyDiagnosticsBtn" type="button">${t(this._lang, "copyDiagnostics")}</button>
+              <small id="diagnosticsState"></small>
+            </div>
+            <pre id="diagnosticsPreview"></pre>
           </div>
           <div>
             <h3>${t(this._lang, "recommendations")}</h3>
@@ -152,6 +179,16 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
   _rec(rec) {
     return `<div class="card"><b>[${rec.severity.toUpperCase()}] ${rec.title}</b><div>${rec.detail}</div><small>category=${rec.category || "general"}, confidence=${rec.confidence ?? "-"}</small><br><small><b>${t(this._lang, "next")}:</b> ${rec.next_action || "-"}</small></div>`;
+  }
+
+  _escape(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[char]);
   }
 
   _sortRows(rows) {
@@ -223,6 +260,27 @@ class HaContextExplorerNextPanel extends HTMLElement {
     });
   }
 
+  _setDiagnosticsCopyDisabled(disabled) {
+    const button = this.querySelector("#copyDiagnosticsBtn");
+    if (button) button.disabled = disabled;
+  }
+
+  _renderPrivacyCoverage(coverage) {
+    const keyHits = (coverage?.sensitive_key_hits || [])
+      .slice(0, 6)
+      .map((item) => `${this._escape(item.key)} (${item.count})`)
+      .join(", ") || "-";
+    const patternHits = Object.entries(coverage?.text_pattern_hits || {})
+      .map(([key, count]) => `${this._escape(key)} (${count})`)
+      .join(", ") || "-";
+
+    this.querySelector("#privacyCoverage").innerHTML = `
+      <div><b>${this._escape(coverage?.entities_with_sensitive_signals ?? 0)}</b> / ${this._escape(coverage?.entities_scanned ?? 0)} ${t(this._lang, "entitiesWithSignals")}</div>
+      <div class="hint">${t(this._lang, "sensitiveKeys")}: ${keyHits}</div>
+      <div class="hint">${t(this._lang, "textPatterns")}: ${patternHits}</div>
+    `;
+  }
+
   async _loadExport() {
     const level = this._exportLevel;
     const path = `ha_context_explorer_next/export/ai_context/${level}`;
@@ -238,6 +296,21 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this._exportPayload = null;
       this.querySelector("#exportHint").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
       this.querySelector("#exportPreview").textContent = "{}";
+    }
+  }
+
+  async _loadDiagnostics() {
+    this._setDiagnosticsCopyDisabled(true);
+    try {
+      const payload = await this._hass.callApi("GET", "ha_context_explorer_next/diagnostics");
+      this._diagnosticsPayload = payload;
+      this.querySelector("#diagnosticsState").textContent = t(this._lang, "diagnosticsReady");
+      this.querySelector("#diagnosticsPreview").textContent = JSON.stringify(payload, null, 2);
+      this._setDiagnosticsCopyDisabled(false);
+    } catch (err) {
+      this._diagnosticsPayload = null;
+      this.querySelector("#diagnosticsState").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
+      this.querySelector("#diagnosticsPreview").textContent = "{}";
     }
   }
 
@@ -269,6 +342,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this.querySelector("#privacyStatus").textContent = privacy.exports_enabled
         ? t(this._lang, "exportsReady")
         : `${t(this._lang, "exportsLocked")} - ${t(this._lang, "keyHint")}`;
+      this._renderPrivacyCoverage(privacy.coverage || {});
 
       const recorderAdvice = payload.recorder_advice || {};
       this.querySelector("#recorder").textContent = JSON.stringify(recorderAdvice.yaml_preview || {}, null, 2);
@@ -314,6 +388,9 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this.querySelector("#copyExportBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload, null, 2));
       this.querySelector("#copyShortBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.llm_context_short || {}, null, 2));
       this.querySelector("#copyFirstBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.action_queue?.do_first || [], null, 2));
+      this.querySelector("#loadDiagnosticsBtn").onclick = async () => this._loadDiagnostics();
+      this.querySelector("#copyDiagnosticsBtn").onclick = async () => copyText(JSON.stringify(this._diagnosticsPayload || {}, null, 2));
+      this._setDiagnosticsCopyDisabled(!this._diagnosticsPayload);
 
       this._renderRecorderTable(recorderAdvice);
       await this._loadExport();

@@ -127,14 +127,17 @@ def test_export_missing_key_skips_snapshot_work(monkeypatch):
 
 def test_snapshot_reports_export_lock_when_mask_key_missing(monkeypatch):
     monkeypatch.delenv("HCX_MASK_KEY", raising=False)
-    payload = service.build_snapshot_payload([_state("sensor.temp", "20")])
+    payload = service.build_snapshot_payload([_state("sensor.temp", "20", {"ip_address": "192.168.1.10"})])
     assert payload["privacy"]["exports_enabled"] is False
     assert payload["privacy"]["mask_key"] == "missing"
+    assert payload["privacy"]["coverage"]["sensitive_key_hits_total"] == 1
+    assert payload["privacy"]["coverage"]["text_pattern_hits"]["ipv4"] == 1
 
 
 def test_diagnostics_payload_explains_export_block(monkeypatch):
     monkeypatch.delenv("HCX_MASK_KEY", raising=False)
-    diagnostics = service.build_diagnostics_payload([_state("sensor.temp", "20")])
+    diagnostics = service.build_diagnostics_payload([_state("sensor.temp", "20", {"email": "admin@example.com"})])
     assert diagnostics["export"]["enabled"] is False
     assert diagnostics["export"]["blocked_reason"] == "HCX_MASK_KEY missing"
     assert "privacy_masking" in diagnostics["capabilities"]
+    assert diagnostics["privacy"]["coverage"]["text_pattern_hits"]["email"] == 1
