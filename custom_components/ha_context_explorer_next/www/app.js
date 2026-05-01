@@ -50,6 +50,7 @@ const I18N = {
     estimatedEvents: "Estimated events/day",
     estimatedBytes: "Estimated bytes/day",
     hotspots: "Hotspots",
+    panelLoadFailed: "Panel could not load",
   },
   de: {
     title: "HA Context Explorer Next",
@@ -102,6 +103,7 @@ const I18N = {
     estimatedEvents: "Geschaetzte Events/Tag",
     estimatedBytes: "Geschaetzte Bytes/Tag",
     hotspots: "Hotspots",
+    panelLoadFailed: "Panel konnte nicht geladen werden",
   },
 };
 
@@ -120,7 +122,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this._domain = "all";
       this._exportLevel = "short";
       this.render();
-      this.load();
+      this.load().catch((err) => this._showFatalError(err));
     }
   }
 
@@ -275,15 +277,55 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
 
 
-  _formatError(err) {
-    if (!err) return "unknown error";
-    const status = err?.status_code || err?.status || err?.code;
-    const msg = err?.body?.message || err?.message || err;
-    const msgText = typeof msg === "string" ? msg : JSON.stringify(msg);
-    if (status === 412 || msgText.includes("HCX_MASK_KEY")) {
-      return `${msgText} (${t(this._lang, "keyHint")})`;
+  _stringifySafe(value) {
+    if (value === undefined) return "";
+    if (value === null) return "null";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    try {
+      const json = JSON.stringify(value);
+      return json && json !== "{}" ? json : String(value);
+    } catch (_err) {
+      return String(value);
     }
-    return msgText;
+  }
+
+  _formatError(err) {
+    try {
+      if (!err) return "unknown error";
+      const status = err?.status_code || err?.status || err?.code;
+      const statusText = err?.statusText || err?.status_text || "";
+      const body = err?.body || err?.response || err;
+      const msg = body?.message || body?.error || err?.message || statusText || body;
+      let msgText = this._stringifySafe(msg);
+      if (!msgText || msgText === "[object Object]") {
+        msgText = status ? `HTTP ${status}` : "unknown error";
+      }
+      if (status === 412 || msgText.includes("HCX_MASK_KEY") || msgText.includes("Privacy mask key")) {
+        return `${msgText} (${t(this._lang, "keyHint")})`;
+      }
+      return msgText;
+    } catch (_err) {
+      return "unknown error";
+    }
+  }
+
+  _setText(selector, text) {
+    const element = this.querySelector(selector);
+    if (element) element.textContent = text;
+  }
+
+  _showFatalError(err) {
+    const message = this._formatError(err);
+    globalThis.console?.warn?.(`HA Context Explorer Next panel load failed: ${message}`);
+    this.innerHTML = `
+      <ha-card header="${t(this._lang, "title")}">
+        <div style="padding:16px">
+          <b>${t(this._lang, "panelLoadFailed")}</b>
+          <div class="hint">${this._escape(message)}</div>
+        </div>
+      </ha-card>
+    `;
   }
 
   _downloadJson(filename, payload) {
@@ -327,7 +369,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
   }
 
   _setExportCopyDisabled(disabled) {
-    ["#copyExportBtn", "#copyShortBtn", "#copyFirstBtn", "#copyUiContextBtn"].forEach((selector) => {
+    ["#copyExportBtn", "#copyShortBtn", "#copyFirstBtn"].forEach((selector) => {
       const button = this.querySelector(selector);
       if (button) button.disabled = disabled;
     });
@@ -430,17 +472,22 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this._setExportCopyDisabled(false);
     } catch (err) {
       this._exportPayload = null;
-      this.querySelector("#exportHint").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
-      this.querySelector("#exportPreview").textContent = "{}";
+      this._setText("#exportHint", `${t(this._lang, "error")}: ${this._formatError(err)}`);
+      this._setText("#exportPreview", "{}");
+      this._setExportCopyDisabled(true);
     }
   }
 
   async _copyUiContext(copyText) {
+    const button = this.querySelector("#copyUiContextBtn");
+    if (button) button.disabled = true;
     try {
       const payload = await this._hass.callApi("GET", "ha_context_explorer_next/export/ui_context");
       await copyText(JSON.stringify(payload, null, 2));
     } catch (err) {
-      this.querySelector("#exportCopyState").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
+      this._setText("#exportCopyState", `${t(this._lang, "error")}: ${this._formatError(err)}`);
+    } finally {
+      if (button) button.disabled = false;
     }
   }
 
@@ -454,8 +501,8 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this._setDiagnosticsCopyDisabled(false);
     } catch (err) {
       this._diagnosticsPayload = null;
-      this.querySelector("#diagnosticsState").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
-      this.querySelector("#diagnosticsPreview").textContent = "{}";
+      this._setText("#diagnosticsState", `${t(this._lang, "error")}: ${this._formatError(err)}`);
+      this._setText("#diagnosticsPreview", "{}");
     }
   }
 
@@ -547,7 +594,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
       this.querySelector("#recs").innerHTML = (payload.recommendations || []).map((rec) => this._rec(rec)).join("");
     } catch (err) {
-      this.innerHTML = `<ha-card><div style="padding:16px">${t(this._lang, "error")}: ${this._formatError(err)}</div></ha-card>`;
+      this._showFatalError(err);
     }
   }
 }
