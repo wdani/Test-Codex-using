@@ -55,6 +55,18 @@ def test_mask_payload_masks_sensitive_attribute_keys():
     assert "network_" in masked_text
 
 
+def test_mask_payload_preserves_exact_pattern_aliases_for_sensitive_keys():
+    payload = {
+        "email": "daniel@example.com",
+        "ip_address": "192.168.1.10",
+        "mac": "AA:BB:CC:DD:EE:FF",
+    }
+    masked = privacy.mask_payload(payload)
+    assert masked["email"] == privacy.mask_text("daniel@example.com")
+    assert masked["ip_address"] == privacy.mask_text("192.168.1.10")
+    assert masked["mac"] == privacy.mask_text("AA:BB:CC:DD:EE:FF")
+
+
 def test_privacy_status_does_not_expose_key(monkeypatch):
     monkeypatch.setenv("HCX_MASK_KEY", "super-secret-value")
     status = privacy.build_privacy_status()

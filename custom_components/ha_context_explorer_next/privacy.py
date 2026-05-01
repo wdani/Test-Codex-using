@@ -59,6 +59,19 @@ def mask_text(value: str) -> str:
     return value
 
 
+def _mask_exact_text_pattern(value: str) -> str | None:
+    stripped = value.strip()
+    if EMAIL_RE.fullmatch(stripped):
+        return stable_mask(stripped, "email")
+    if IPV4_RE.fullmatch(stripped):
+        return stable_mask(stripped, "ip")
+    if MAC_RE.fullmatch(stripped):
+        return stable_mask(stripped, "mac")
+    if IPV6_RE.fullmatch(stripped):
+        return stable_mask(stripped, "ip6")
+    return None
+
+
 def _normalize_key(key: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "_", str(key).lower()).strip("_")
 
@@ -80,7 +93,7 @@ def _mask_prefix_for_key(key: Any) -> str | None:
 
 def _mask_sensitive_value(value: Any, prefix: str) -> Any:
     if isinstance(value, str):
-        return stable_mask(mask_text(value), prefix)
+        return _mask_exact_text_pattern(value) or stable_mask(value, prefix)
     if isinstance(value, (int, float, bool)) or value is None:
         return stable_mask(str(value), prefix)
     if isinstance(value, list):
