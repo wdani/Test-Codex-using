@@ -87,3 +87,27 @@ def test_domain_health_uses_noise_summary_without_attribute_rescan():
     by_domain = {row["domain"]: row for row in rows}
     assert by_domain["sensor"]["noise_score"] == 1200
     assert by_domain["switch"]["noise_score"] == 300
+
+
+def test_recorder_volume_summary_orders_hotspots_and_candidates():
+    states = [
+        _state("sensor.big_payload", "20", {"blob": "x" * 9000, "extra": "y" * 2000}),
+        _state("lock.front", "locked", {"friendly_name": "Front Lock", "blob": "x" * 9000}),
+        _state("light.kitchen", "on", {"brightness": 200}),
+    ]
+    noise = analysis.build_noise_summary(states)
+    volume = analysis.build_recorder_volume_summary(states, noise)
+    assert volume["totals"]["entities_scanned"] == 3
+    assert volume["totals"]["high_impact_entities"] >= 1
+    assert volume["top_entities"][0]["entity_id"] in {"sensor.big_payload", "lock.front"}
+    assert "sensor.big_payload" in volume["safe_exclusion_candidates"]
+    assert "lock.front" not in volume["safe_exclusion_candidates"]
+
+
+def test_generate_recommendations_includes_recorder_volume_hotspots():
+    summary = {"entities_total": 10, "entities_unavailable_or_unknown": 0}
+    noise = {"top_noisy_entities": [{"noise_score": 50}]}
+    battery = {"battery_entities_low": 0}
+    recorder_volume = {"totals": {"high_impact_entities": 1, "domains_review": 0}}
+    rec_ids = {r["id"] for r in analysis.generate_recommendations(summary, noise, battery, recorder_volume)}
+    assert "recorder-volume-hotspots" in rec_ids
