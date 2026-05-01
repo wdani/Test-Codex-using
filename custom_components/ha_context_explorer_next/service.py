@@ -17,6 +17,7 @@ from .exporter import build_ai_context_bundle
 from .privacy import build_privacy_coverage, build_privacy_status, has_custom_mask_key, mask_payload
 
 EXPORT_LEVELS = {"short", "deep"}
+UI_CONTEXT_VERSION = "1.0.0"
 
 
 def build_snapshot_payload(
@@ -88,6 +89,204 @@ def build_ai_export_payload(
     return bundle
 
 
+def _section(
+    section_id: str,
+    title: str,
+    visible_state: dict[str, Any],
+    *,
+    controls: list[str] | None = None,
+    tables: list[dict[str, Any]] | None = None,
+    actions: list[str] | None = None,
+    notes: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": section_id,
+        "title": title,
+        "visible_state": visible_state,
+        "controls": controls or [],
+        "tables": tables or [],
+        "actions": actions or [],
+        "notes": notes or [],
+    }
+
+
+def build_ui_context_payload(
+    states: list[Any],
+    mask_key: str | None = None,
+    key_source: str | None = None,
+    key_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not has_custom_mask_key(mask_key):
+        raise ValueError("Privacy mask key must be available for UI context export")
+
+    snapshot = mask_payload(build_snapshot_payload(states, mask_key, key_source, key_metadata), mask_key)
+    privacy = snapshot["privacy"]
+    battery = snapshot["battery"]
+    recorder_advice = snapshot["recorder_advice"]
+    recorder_volume = snapshot["recorder_volume"]
+    recommendations = snapshot["recommendations"]
+
+    sections = [
+        _section(
+            "overview_kpis",
+            "Overview KPI cards",
+            {
+                "entities": snapshot["summary"].get("entities_total", 0),
+                "unavailable_or_unknown": snapshot["summary"].get("entities_unavailable_or_unknown", 0),
+                "critical_battery": battery.get("battery_entities_critical", 0),
+                "low_battery": battery.get("battery_entities_low", 0),
+            },
+            notes=["First viewport summary cards prioritize scale, availability, and battery urgency."],
+        ),
+        _section(
+            "battery_health",
+            "Battery health",
+            {
+                "critical": battery.get("battery_entities_critical", 0),
+                "low": battery.get("battery_entities_low", 0),
+                "watch": battery.get("battery_entities_watch", 0),
+                "unknown": battery.get("battery_entities_unknown", 0),
+            },
+            tables=[
+                {
+                    "id": "battery_risks",
+                    "columns": ["entity_id", "device_key", "percent", "risk_level", "recommended_action"],
+                    "visible_rows": battery.get("top_battery_risks", [])[:8],
+                }
+            ],
+            notes=["Rows are ordered by risk first so maintenance work is visible before lower-priority signals."],
+        ),
+        _section(
+            "top_noisy_entities",
+            "Top noisy entities",
+            {"rows_visible": 5},
+            tables=[
+                {
+                    "id": "top_noisy_entities",
+                    "columns": ["entity_id", "domain", "noise_score"],
+                    "visible_rows": snapshot["noise"].get("top_noisy_entities", [])[:5],
+                }
+            ],
+        ),
+        _section(
+            "recorder_advice",
+            "Recorder advice",
+            {"yaml_preview": recorder_advice.get("yaml_preview", {})},
+            controls=["domain_filter", "sort", "copy_yaml"],
+            tables=[
+                {
+                    "id": "recorder_entity_suggestions",
+                    "columns": ["entity_id", "domain", "noise_score", "risk_level"],
+                    "visible_rows": recorder_advice.get("entity_suggestions", [])[:12],
+                }
+            ],
+            actions=["copy recorder YAML preview"],
+        ),
+        _section(
+            "recorder_logbook_volume",
+            "Recorder/logbook volume",
+            recorder_volume.get("totals", {}),
+            tables=[
+                {
+                    "id": "recorder_volume_entities",
+                    "columns": [
+                        "entity_id",
+                        "domain",
+                        "estimated_daily_events",
+                        "estimated_daily_state_bytes",
+                        "risk_level",
+                    ],
+                    "visible_rows": recorder_volume.get("top_entities", [])[:8],
+                }
+            ],
+            notes=recorder_volume.get("notes", []),
+        ),
+        _section(
+            "domain_health_matrix",
+            "Domain health matrix",
+            {"rows_visible": min(len(snapshot["domain_health"]), 20)},
+            tables=[
+                {
+                    "id": "domain_health",
+                    "columns": ["domain", "entities", "noise_score", "noise_density", "risk"],
+                    "visible_rows": snapshot["domain_health"][:20],
+                }
+            ],
+        ),
+        _section(
+            "privacy_export_status",
+            "Privacy/export status",
+            {
+                "exports_enabled": privacy.get("exports_enabled"),
+                "key_source": privacy.get("key_source"),
+                "key_fingerprint": privacy.get("key_fingerprint"),
+                "entities_with_sensitive_signals": privacy.get("coverage", {}).get("entities_with_sensitive_signals", 0),
+                "entities_scanned": privacy.get("coverage", {}).get("entities_scanned", 0),
+                "sensitive_key_hits": privacy.get("coverage", {}).get("sensitive_key_hits", [])[:6],
+                "text_pattern_hits": privacy.get("coverage", {}).get("text_pattern_hits", {}),
+            },
+            controls=["download_key_backup", "rotate_key"],
+            notes=["The raw privacy key is never included in this UI context export."],
+        ),
+        _section(
+            "export_workbench",
+            "Export workbench",
+            {"default_level": "short", "available_levels": sorted(EXPORT_LEVELS)},
+            controls=["export_level", "copy_export_json", "copy_llm_short", "copy_do_first", "copy_ui_context"],
+            actions=["copy masked AI export", "copy short LLM context", "copy first action queue", "copy UI context"],
+        ),
+        _section(
+            "diagnostics",
+            "Diagnostics",
+            {"initial_preview": "empty_until_loaded"},
+            controls=["load_diagnostics", "copy_diagnostics_json"],
+            actions=["load admin diagnostics payload", "copy diagnostics JSON"],
+        ),
+        _section(
+            "recommendations",
+            "Recommendations",
+            {"count": len(recommendations)},
+            tables=[
+                {
+                    "id": "recommendations",
+                    "columns": ["severity", "title", "detail", "category", "confidence", "next_action"],
+                    "visible_rows": recommendations,
+                }
+            ],
+            notes=["Cards are sorted by severity so high-impact work appears first."],
+        ),
+    ]
+
+    return {
+        "schema_version": UI_CONTEXT_VERSION,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "product": "ha_context_explorer_next",
+        "source": "panel_user_visible_context",
+        "purpose": "Help an AI understand what the Home Assistant panel shows to a human user.",
+        "privacy": {
+            "masked": True,
+            "key_source": privacy.get("key_source"),
+            "key_fingerprint": privacy.get("key_fingerprint"),
+            "raw_key_included": False,
+        },
+        "panel": {
+            "title": "HA Context Explorer Next",
+            "url": PANEL_URL,
+            "module_url": PANEL_MODULE_URL,
+            "initial_export_level": "short",
+            "reading_order": [section["id"] for section in sections],
+        },
+        "sections": sections,
+        "user_tasks_supported": [
+            "Find unavailable or unknown entities.",
+            "Prioritize battery maintenance.",
+            "Identify recorder/logbook noise and volume hotspots.",
+            "Generate masked AI exports.",
+            "Collect diagnostics for support or Codex handover.",
+        ],
+    }
+
+
 def build_diagnostics_payload(
     states: list[Any],
     mask_key: str | None = None,
@@ -119,6 +318,7 @@ def build_diagnostics_payload(
             "recorder_volume",
             "ai_export_short",
             "ai_export_deep",
+            "ui_context_export",
         ],
         "privacy": privacy,
         "export": {

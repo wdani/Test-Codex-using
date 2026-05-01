@@ -5,7 +5,13 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .privacy_key import async_build_privacy_key_backup, async_get_privacy_key_context, async_rotate_privacy_key
-from .service import build_ai_export_payload, build_diagnostics_payload, build_ideas_payload, build_snapshot_payload
+from .service import (
+    build_ai_export_payload,
+    build_diagnostics_payload,
+    build_ideas_payload,
+    build_snapshot_payload,
+    build_ui_context_payload,
+)
 
 
 def _integration_enabled(hass: HomeAssistant) -> bool:
@@ -76,6 +82,27 @@ class ExportLevelView(HomeAssistantView):
         try:
             key_context = await async_get_privacy_key_context(hass)
             return self.json(build_ai_export_payload(list(hass.states.async_all()), level=level, **key_context))
+        except ValueError as exc:
+            return self.json_message(str(exc), status_code=412)
+
+
+class UIContextExportView(HomeAssistantView):
+    url = "/api/ha_context_explorer_next/export/ui_context"
+    name = "api:ha_context_explorer_next:export_ui_context"
+    requires_auth = True
+
+    async def get(self, request):
+        hass: HomeAssistant = request.app["hass"]
+        if not _integration_enabled(hass):
+            return self.json_message("Integration disabled", status_code=503)
+
+        denied = _require_admin(self, request)
+        if denied:
+            return denied
+
+        try:
+            key_context = await async_get_privacy_key_context(hass)
+            return self.json(build_ui_context_payload(list(hass.states.async_all()), **key_context))
         except ValueError as exc:
             return self.json_message(str(exc), status_code=412)
 
@@ -159,6 +186,7 @@ def async_register_api(hass: HomeAssistant) -> None:
     hass.http.register_view(SummaryView)
     hass.http.register_view(ExportView)
     hass.http.register_view(ExportLevelView)
+    hass.http.register_view(UIContextExportView)
     hass.http.register_view(IdeasView)
     hass.http.register_view(DiagnosticsView)
     hass.http.register_view(PrivacyKeyBackupView)

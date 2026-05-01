@@ -71,6 +71,9 @@ Endpoints:
 - `/api/ha_context_explorer_next/export/ai_context`
 - `/api/ha_context_explorer_next/export/ai_context/short`
 - `/api/ha_context_explorer_next/export/ai_context/deep`
+- `/api/ha_context_explorer_next/export/ui_context`
+
+The UI context export describes the panel as a user sees it: KPI cards, visible tables, controls, export workbench actions, diagnostics actions, and recommendations. It is masked and intended to help an AI review whether the interface is understandable from a human user's point of view.
 
 ## Developer diagnostics
 

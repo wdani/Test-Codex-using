@@ -55,6 +55,37 @@ def test_build_ai_export_payload_contains_sections():
     assert "recorder_volume" in export
 
 
+def test_build_ui_context_payload_describes_visible_panel_without_raw_sensitive_values(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    payload = service.build_ui_context_payload(
+        [
+            _state("sensor.router", "online", {"ip_address": "192.168.1.10"}),
+            _state("sensor.remote_battery", "9", {"device_class": "battery"}),
+            _state("camera.map", "idle", {"blob": "x" * 9000}),
+        ],
+        mask_key="managed-test-key",
+        key_source="managed_storage",
+    )
+    assert payload["source"] == "panel_user_visible_context"
+    assert payload["privacy"]["masked"] is True
+    assert payload["privacy"]["raw_key_included"] is False
+    assert "192.168.1.10" not in str(payload)
+
+    section_ids = {section["id"] for section in payload["sections"]}
+    assert {
+        "overview_kpis",
+        "battery_health",
+        "recorder_advice",
+        "recorder_logbook_volume",
+        "privacy_export_status",
+        "export_workbench",
+        "recommendations",
+    }.issubset(section_ids)
+    assert "copy_ui_context" in next(
+        section for section in payload["sections"] if section["id"] == "export_workbench"
+    )["controls"]
+
+
 def test_build_ideas_payload_has_multiple_ideas():
     ideas = service.build_ideas_payload()["ideas"]
     assert len(ideas) >= 5
