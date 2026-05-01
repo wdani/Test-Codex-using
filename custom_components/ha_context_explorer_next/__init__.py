@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 
 from .api import async_register_api
 from .const import DOMAIN, PANEL_ICON, PANEL_MODULE_URL, PANEL_TITLE, PANEL_URL, PLATFORMS
+from .privacy_key import async_load_or_create_privacy_key
 
 
 def _module_path() -> str:
@@ -18,6 +19,7 @@ def _module_path() -> str:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     state = hass.data.setdefault(DOMAIN, {})
     state["enabled"] = True
+    await async_load_or_create_privacy_key(hass)
 
     if not state.get("static_registered"):
         await hass.http.async_register_static_paths(

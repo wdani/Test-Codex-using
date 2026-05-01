@@ -27,7 +27,14 @@ const I18N = {
     copyShort: "Copy LLM short",
     copyFirst: "Copy do_first",
     domainHealth: "Domain health matrix",
-    keyHint: "Set HCX_MASK_KEY to enable export endpoints.",
+    keyHint: "A privacy key is created automatically; HCX_MASK_KEY only overrides it for development.",
+    backupKey: "Download key backup",
+    rotateKey: "Rotate key",
+    keySource: "Key source",
+    keyFingerprint: "Key fingerprint",
+    keyBackupReady: "Key backup ready",
+    keyRotated: "Key rotated",
+    rotateKeyConfirm: "Rotate privacy key? New exports will use different masked aliases than older exports.",
     privacyStatus: "Privacy/export status",
     exportsReady: "Exports enabled",
     exportsLocked: "Exports locked",
@@ -71,7 +78,14 @@ const I18N = {
     copyShort: "LLM Kurzkontext kopieren",
     copyFirst: "do_first kopieren",
     domainHealth: "Domain-Gesundheitsmatrix",
-    keyHint: "Setze HCX_MASK_KEY, um Export-Endpunkte zu aktivieren.",
+    keyHint: "Ein Datenschutz-Schluessel wird automatisch erstellt; HCX_MASK_KEY ist nur ein Entwickler-Override.",
+    backupKey: "Key-Backup laden",
+    rotateKey: "Key rotieren",
+    keySource: "Key-Quelle",
+    keyFingerprint: "Key-Fingerprint",
+    keyBackupReady: "Key-Backup bereit",
+    keyRotated: "Key rotiert",
+    rotateKeyConfirm: "Privacy-Key rotieren? Neue Exporte nutzen andere maskierte Aliase als alte Exporte.",
     privacyStatus: "Datenschutz/Export-Status",
     exportsReady: "Exporte aktiv",
     exportsLocked: "Exporte gesperrt",
@@ -168,6 +182,11 @@ class HaContextExplorerNextPanel extends HTMLElement {
           </div>
           <div class="card">
             <h3>${t(this._lang, "privacyStatus")}</h3>
+            <div class="controls">
+              <button id="downloadKeyBtn" type="button">${t(this._lang, "backupKey")}</button>
+              <button id="rotateKeyBtn" type="button">${t(this._lang, "rotateKey")}</button>
+              <small id="privacyKeyState"></small>
+            </div>
             <div class="hint" id="privacyStatus"></div>
             <div id="privacyCoverage"></div>
           </div>
@@ -264,6 +283,18 @@ class HaContextExplorerNextPanel extends HTMLElement {
     return msgText;
   }
 
+  _downloadJson(filename, payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async _writeClipboard(text) {
     const value = text ?? "";
     const clipboard = globalThis.navigator?.clipboard;
@@ -350,6 +381,39 @@ class HaContextExplorerNextPanel extends HTMLElement {
     `;
   }
 
+  _renderPrivacyStatus(privacy) {
+    const source = privacy?.key_source || "-";
+    const fingerprint = privacy?.key_fingerprint || "-";
+    this.querySelector("#privacyStatus").textContent =
+      `${privacy.exports_enabled ? t(this._lang, "exportsReady") : t(this._lang, "exportsLocked")} - ` +
+      `${t(this._lang, "keySource")}: ${source}, ${t(this._lang, "keyFingerprint")}: ${fingerprint}`;
+
+    const rotateButton = this.querySelector("#rotateKeyBtn");
+    if (rotateButton) rotateButton.disabled = !privacy.rotation_available;
+  }
+
+  async _downloadKeyBackup() {
+    try {
+      const payload = await this._hass.callApi("GET", "ha_context_explorer_next/privacy/key/backup");
+      const fingerprint = payload?.key_fingerprint || "privacy-key";
+      this._downloadJson(`ha-context-explorer-mask-key-${fingerprint}.json`, payload);
+      this.querySelector("#privacyKeyState").textContent = t(this._lang, "keyBackupReady");
+    } catch (err) {
+      this.querySelector("#privacyKeyState").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
+    }
+  }
+
+  async _rotateKey() {
+    if (!globalThis.confirm(t(this._lang, "rotateKeyConfirm"))) return;
+    try {
+      await this._hass.callApi("POST", "ha_context_explorer_next/privacy/key/rotate");
+      this.querySelector("#privacyKeyState").textContent = t(this._lang, "keyRotated");
+      await this.load();
+    } catch (err) {
+      this.querySelector("#privacyKeyState").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
+    }
+  }
+
   async _loadExport() {
     const level = this._exportLevel;
     const path = `ha_context_explorer_next/export/ai_context/${level}`;
@@ -410,9 +474,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this.querySelector("#domainHealthTable").innerHTML = `<thead><tr><th>Domain</th><th>Entities</th><th>Score</th><th>Density</th><th>Risk</th></tr></thead><tbody>${domainHealthRows}</tbody>`;
 
       const privacy = payload.privacy || {};
-      this.querySelector("#privacyStatus").textContent = privacy.exports_enabled
-        ? t(this._lang, "exportsReady")
-        : `${t(this._lang, "exportsLocked")} - ${t(this._lang, "keyHint")}`;
+      this._renderPrivacyStatus(privacy);
       this._renderPrivacyCoverage(privacy.coverage || {});
 
       const recorderAdvice = payload.recorder_advice || {};
@@ -443,6 +505,8 @@ class HaContextExplorerNextPanel extends HTMLElement {
           this.querySelector("#copyState").textContent = `${t(this._lang, "error")}: ${e}`;
         }
       };
+      this.querySelector("#downloadKeyBtn").onclick = async () => this._downloadKeyBackup();
+      this.querySelector("#rotateKeyBtn").onclick = async () => this._rotateKey();
 
       this.querySelector("#exportLevelSelect").onchange = async (e) => {
         this._exportLevel = e.target.value;

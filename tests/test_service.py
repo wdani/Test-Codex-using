@@ -104,6 +104,20 @@ def test_export_requires_custom_mask_key(monkeypatch):
         assert True
 
 
+def test_managed_mask_key_enables_export_without_env(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    export = service.build_ai_export_payload(
+        [_state("sensor.router", "192.168.1.10", {"ip_address": "192.168.1.10"})],
+        mask_key="managed-test-key",
+        key_source="managed_storage",
+        key_metadata={"created_at": "2026-05-02T00:00:00+00:00"},
+    )
+    assert export["privacy"]["exports_enabled"] is True
+    assert export["privacy"]["key_source"] == "managed_storage"
+    assert export["privacy"]["key_created_at"] == "2026-05-02T00:00:00+00:00"
+    assert "192.168.1.10" not in str(export)
+
+
 def test_domain_health_uses_all_domains_not_top10_only():
     states = [_state(f"domain{i}.x", "on") for i in range(12)]
     payload = service.build_snapshot_payload(states)
@@ -149,11 +163,27 @@ def test_diagnostics_payload_explains_export_block(monkeypatch):
     monkeypatch.delenv("HCX_MASK_KEY", raising=False)
     diagnostics = service.build_diagnostics_payload([_state("sensor.temp", "20", {"email": "admin@example.com"})])
     assert diagnostics["export"]["enabled"] is False
-    assert diagnostics["export"]["blocked_reason"] == "HCX_MASK_KEY missing"
+    assert diagnostics["export"]["blocked_reason"] == "Privacy mask key missing"
     assert "battery_health" in diagnostics["capabilities"]
+    assert "managed_privacy_key" in diagnostics["capabilities"]
+    assert "privacy_key_backup" in diagnostics["capabilities"]
+    assert "privacy_key_rotation" in diagnostics["capabilities"]
     assert "privacy_masking" in diagnostics["capabilities"]
     assert "recorder_volume" in diagnostics["capabilities"]
     assert diagnostics["privacy"]["coverage"]["text_pattern_hits"]["email"] == 1
+
+
+def test_diagnostics_payload_uses_managed_key_metadata(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    diagnostics = service.build_diagnostics_payload(
+        [_state("sensor.temp", "20")],
+        mask_key="managed-test-key",
+        key_source="managed_storage",
+        key_metadata={"created_at": "2026-05-02T00:00:00+00:00", "rotated_at": None},
+    )
+    assert diagnostics["export"]["enabled"] is True
+    assert diagnostics["export"]["blocked_reason"] is None
+    assert diagnostics["privacy"]["key_managed"] is True
 
 
 def test_battery_health_is_in_snapshot_diagnostics_and_export():

@@ -31,3 +31,13 @@ git config core.eol lf
 ```
 
 If files were already checked out with CRLF, re-checkout the branch after changing the config or let Git normalize them on the next touched file.
+
+## Privacy key
+
+Normal Home Assistant runs create a managed mask key automatically. Developers can temporarily override it with:
+
+```bash
+export HCX_MASK_KEY="replace-with-a-long-random-secret"
+```
+
+Do not commit real mask keys or downloaded key backups.

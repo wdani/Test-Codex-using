@@ -11,6 +11,21 @@ def test_stable_mask_is_deterministic():
     assert privacy.stable_mask("192.168.0.12", "ip") == privacy.stable_mask("192.168.0.12", "ip")
 
 
+def test_generated_mask_key_can_drive_stable_aliases(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    key = privacy.generate_mask_key()
+    assert len(key) >= 32
+    assert privacy.has_custom_mask_key(key) is True
+    assert privacy.stable_mask("192.168.0.12", "ip", key) == privacy.stable_mask("192.168.0.12", "ip", key)
+
+
+def test_supplied_mask_keys_create_different_aliases(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    first = privacy.mask_text("Device at 192.168.1.10", mask_key="first-key")
+    second = privacy.mask_text("Device at 192.168.1.10", mask_key="second-key")
+    assert first != second
+
+
 def test_mask_text_masks_ipv4_and_mac():
     masked = privacy.mask_text("Device at 192.168.1.10 with mac AA:BB:CC:DD:EE:FF")
     assert "192.168.1.10" not in masked
@@ -23,6 +38,12 @@ def test_mask_text_masks_email_and_ipv6():
     assert "admin@example.com" not in masked
     assert "fe80::1ff:fe23:4567:890a" not in masked
     assert "email_" in masked and "ip6_" in masked
+
+
+def test_mask_text_does_not_treat_timestamps_as_ipv6():
+    timestamp = "2026-05-02T00:00:00+00:00"
+    assert privacy.mask_text(timestamp) == timestamp
+    assert privacy._text_pattern_counts(timestamp) == {}
 
 
 def test_mask_payload_masks_nested_strings():
@@ -72,7 +93,18 @@ def test_privacy_status_does_not_expose_key(monkeypatch):
     status = privacy.build_privacy_status()
     assert status["exports_enabled"] is True
     assert status["mask_key"] == "custom"
+    assert status["key_source"] == "environment"
+    assert status["key_fingerprint"]
     assert "super-secret-value" not in str(status)
+
+
+def test_privacy_status_reports_managed_key_without_exposing_it(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+    status = privacy.build_privacy_status(mask_key="managed-secret", key_source="managed_storage")
+    assert status["exports_enabled"] is True
+    assert status["key_managed"] is True
+    assert status["rotation_available"] is True
+    assert "managed-secret" not in str(status)
 
 
 def test_privacy_coverage_reports_counts_without_raw_values():
