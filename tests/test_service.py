@@ -78,6 +78,7 @@ def test_export_contains_action_queue_and_llm_context():
 def test_export_short_level_is_compact():
     export = service.build_ai_export_payload([_state("sensor.temp", "20")], level="short")
     assert export["export_level"] == "short"
+    assert "battery" in export
     assert "llm_context_short" in export
     assert "llm_context_deep" not in export
 
@@ -149,9 +150,27 @@ def test_diagnostics_payload_explains_export_block(monkeypatch):
     diagnostics = service.build_diagnostics_payload([_state("sensor.temp", "20", {"email": "admin@example.com"})])
     assert diagnostics["export"]["enabled"] is False
     assert diagnostics["export"]["blocked_reason"] == "HCX_MASK_KEY missing"
+    assert "battery_health" in diagnostics["capabilities"]
     assert "privacy_masking" in diagnostics["capabilities"]
     assert "recorder_volume" in diagnostics["capabilities"]
     assert diagnostics["privacy"]["coverage"]["text_pattern_hits"]["email"] == 1
+
+
+def test_battery_health_is_in_snapshot_diagnostics_and_export():
+    states = [
+        _state("sensor.remote_power", "9", {"device_class": "battery"}),
+        _state("light.motion", "on", {"battery_level": 31}),
+    ]
+    snapshot = service.build_snapshot_payload(states)
+    assert snapshot["battery"]["battery_entities_critical"] == 1
+    assert snapshot["battery"]["battery_entities_watch"] == 1
+
+    diagnostics = service.build_diagnostics_payload(states)
+    assert diagnostics["counts"]["battery_entities_critical"] == 1
+
+    export = service.build_ai_export_payload(states)
+    assert export["meta"]["instance_profile"]["battery_entities_critical"] == 1
+    assert export["llm_context_deep"]["top_battery_risks"][0]["entity_id"] == "sensor.remote_power"
 
 
 def test_recorder_volume_is_in_short_export():

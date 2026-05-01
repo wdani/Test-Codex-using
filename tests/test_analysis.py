@@ -31,6 +31,40 @@ def test_build_battery_summary_detects_low_battery():
     battery = analysis.build_battery_summary(states)
     assert battery["battery_entities_total"] == 2
     assert battery["battery_entities_low"] == 1
+    assert battery["low_battery_entities"][0]["risk_level"] == "low"
+
+
+def test_build_battery_summary_detects_device_class_attributes_and_binary_low():
+    states = [
+        _state("sensor.remote_power", "9 %", {"device_class": "battery"}),
+        _state("light.motion", "on", {"battery_level": 31}),
+        _state("sensor.attr_low", "ok", {"battery_low": True}),
+        _state("binary_sensor.window_battery_low", "on", {"device_class": "battery"}),
+        _state("sensor.dead_battery", "unavailable", name="Dead Battery"),
+    ]
+    battery = analysis.build_battery_summary(states)
+    assert battery["battery_entities_total"] == 5
+    assert battery["battery_entities_critical"] == 1
+    assert battery["battery_entities_low"] == 3
+    assert battery["battery_entities_watch"] == 1
+    assert battery["battery_entities_unknown"] == 1
+    risks = {item["entity_id"]: item["risk_level"] for item in battery["top_battery_risks"]}
+    assert risks["sensor.remote_power"] == "critical"
+    assert risks["light.motion"] == "watch"
+    assert risks["sensor.attr_low"] == "low"
+    assert risks["binary_sensor.window_battery_low"] == "low"
+    assert risks["sensor.dead_battery"] == "unknown"
+
+
+def test_battery_summary_groups_signals_by_device_key():
+    states = [
+        _state("sensor.front_door_battery", "18", name="Front Door Battery"),
+        _state("binary_sensor.front_door_battery_low", "off", {"device_class": "battery"}),
+    ]
+    battery = analysis.build_battery_summary(states)
+    devices = {item["device_key"]: item for item in battery["by_device"]}
+    assert devices["front_door"]["signals"] == 2
+    assert devices["front_door"]["risk_level"] == "low"
 
 
 def test_generate_recommendations_returns_expected_items():
@@ -39,6 +73,19 @@ def test_generate_recommendations_returns_expected_items():
     battery = {"battery_entities_low": 1}
     rec_ids = {r["id"] for r in analysis.generate_recommendations(summary, noise, battery)}
     assert {"availability-review", "scale-recorder-review", "battery-attention", "noise-hotspots"}.issubset(rec_ids)
+
+
+def test_generate_recommendations_includes_battery_health_items():
+    summary = {"entities_total": 10, "entities_unavailable_or_unknown": 0}
+    noise = {"top_noisy_entities": []}
+    battery = {
+        "battery_entities_low": 1,
+        "battery_entities_critical": 1,
+        "battery_entities_unknown": 1,
+        "battery_entities_watch": 1,
+    }
+    rec_ids = {r["id"] for r in analysis.generate_recommendations(summary, noise, battery)}
+    assert {"battery-critical", "battery-signal-health", "battery-watchlist"}.issubset(rec_ids)
 
 
 def test_generate_recommendations_sorted_by_severity_and_next_action():

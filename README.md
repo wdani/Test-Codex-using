@@ -20,6 +20,7 @@ HA Context Explorer Next helps users understand:
 - Rule-based recommendations engine
 - English-first UI with i18n-ready structure
 - Admin diagnostics endpoint for support handovers and UI debugging
+- Battery health diagnostics for low, critical, watch, and unknown battery signals
 - Heuristic recorder/logbook volume analysis from current state metadata
 
 ## Status
@@ -78,3 +79,14 @@ It reports:
 - top entity and domain hotspots
 - safe exclusion candidates that avoid critical control/security domains
 - a clear note that the estimate should be replaced with recorder statistics when available
+
+## Battery health diagnostics
+
+The summary, diagnostics, and AI export payloads include a richer `battery` section. It detects battery signals from entity ids, names, `device_class: battery`, common battery attributes, and binary low-battery sensors.
+
+It reports:
+
+- critical, low, watch, unknown, and healthy battery signals
+- grouped device keys so duplicated battery entities are easier to review together
+- top battery risks and a maintenance queue for the next action list
+- recommendation items for critical batteries, unreadable battery signals, and watch-list devices

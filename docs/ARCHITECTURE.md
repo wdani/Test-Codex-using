@@ -25,6 +25,13 @@
 - Critical control/security domains are excluded from safe exclusion candidates.
 - Future recorder integration should replace estimated event counts with observed database/event statistics.
 
+## Battery health model
+
+- `battery` detection uses entity id/name markers, `device_class: battery`, common battery attributes, and binary low-battery sensors.
+- Signals are classified as critical, low, watch, unknown, or safe while preserving the legacy low-battery counters.
+- Device keys strip common battery suffixes so multiple signals for the same physical device can be grouped.
+- AI exports include top battery risks in deep context and battery counters in short context.
+
 ## Privacy model
 
 - Export payloads require a non-default `HCX_MASK_KEY`.
@@ -36,6 +43,7 @@
 ## UI workbenches
 
 - Summary cards show entity, availability, battery, noise, recorder, and domain-health signals.
+- Battery health shows critical/low/watch/unknown counts and the highest-risk maintenance rows.
 - Recorder/logbook volume shows likely database/logbook hotspots and estimated daily state volume.
 - Privacy/export status shows whether export endpoints are unlocked and how many sensitive signals were detected.
 - Export workbench loads short/deep AI payloads and supports copying targeted slices.
@@ -44,6 +52,6 @@
 ## Near-term roadmap
 
 - Add recorder/logbook-backed volume analytics
-- Add battery-focused diagnostics
+- Add measured battery drain/change-rate diagnostics from real history
 - Add i18n translation bundles
 - Add richer graph/relationship model
