@@ -35,9 +35,9 @@ def build_snapshot_payload(states: list[Any]) -> dict[str, Any]:
 
 def build_ai_export_payload(states: list[Any], level: str = "deep") -> dict[str, Any]:
     level = level if level in EXPORT_LEVELS else "deep"
-    snapshot = mask_payload(build_snapshot_payload(states))
     if not has_custom_mask_key():
         raise ValueError("HCX_MASK_KEY must be set for export")
+    snapshot = mask_payload(build_snapshot_payload(states))
 
     bundle = build_ai_context_bundle(
         snapshot["summary"],

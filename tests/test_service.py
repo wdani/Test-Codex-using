@@ -107,3 +107,18 @@ def test_domain_health_noise_not_limited_to_top10_domains():
     by_domain = {d["domain"]: d for d in payload["domain_health"]}
     assert "d11" in by_domain
     assert by_domain["d11"]["noise_score"] > 0
+
+
+def test_export_missing_key_skips_snapshot_work(monkeypatch):
+    monkeypatch.delenv("HCX_MASK_KEY", raising=False)
+
+    def _should_not_run(_states):
+        raise AssertionError("build_snapshot_payload should not run when key is missing")
+
+    monkeypatch.setattr(service, "build_snapshot_payload", _should_not_run)
+
+    try:
+        service.build_ai_export_payload([_state("sensor.temp", "20")])
+        assert False, "expected ValueError"
+    except ValueError:
+        assert True

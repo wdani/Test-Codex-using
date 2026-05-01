@@ -170,11 +170,12 @@ class HaContextExplorerNextPanel extends HTMLElement {
   _formatError(err) {
     if (!err) return "unknown error";
     const status = err?.status_code || err?.status || err?.code;
-    const msg = err?.body?.message || err?.message || String(err);
-    if (status === 412 || msg.includes("HCX_MASK_KEY")) {
-      return `${msg} (${t(this._lang, "keyHint")})`;
+    const msg = err?.body?.message || err?.message || err;
+    const msgText = typeof msg === "string" ? msg : JSON.stringify(msg);
+    if (status === 412 || msgText.includes("HCX_MASK_KEY")) {
+      return `${msgText} (${t(this._lang, "keyHint")})`;
     }
-    return msg;
+    return msgText;
   }
 
   async _loadExport() {

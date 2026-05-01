@@ -59,6 +59,7 @@ def build_noise_summary(states: list[Any]) -> dict[str, Any]:
         "generated_at": datetime.now(UTC).isoformat(),
         "top_noisy_entities": top_noisy,
         "top_noisy_domains": top_domains,
+        "domain_noise_all": dict(domain_noise),
     }
 
 
@@ -251,18 +252,15 @@ def build_recorder_advice(noise_summary: dict[str, Any]) -> dict[str, Any]:
 
 def build_domain_health(states: list[Any], noise_summary: dict[str, Any]) -> list[dict[str, Any]]:
     domain_counts: dict[str, int] = {}
-    domain_noise: dict[str, int] = {}
+    domain_noise: dict[str, int] = {
+        str(domain): int(score)
+        for domain, score in (noise_summary.get("domain_noise_all", {}) or {}).items()
+    }
 
     for state in states:
         entity_id = getattr(state, "entity_id", "unknown.unknown")
         domain = _entity_domain(entity_id)
         domain_counts[domain] = domain_counts.get(domain, 0) + 1
-
-        attrs = getattr(state, "attributes", {}) or {}
-        attr_keys = len(attrs.keys())
-        attr_chars = sum(len(str(k)) + len(str(v)) for k, v in attrs.items())
-        score = (attr_keys * 2) + attr_chars
-        domain_noise[domain] = domain_noise.get(domain, 0) + score
 
     rows = []
     for domain in sorted(set(domain_counts) | set(domain_noise)):

@@ -69,3 +69,21 @@ def test_recommendation_includes_category_and_confidence():
     battery = {"battery_entities_low": 1}
     recs = analysis.generate_recommendations(summary, noise, battery)
     assert all("category" in r and "confidence" in r for r in recs)
+
+
+def test_domain_health_uses_noise_summary_without_attribute_rescan():
+    class StateNoAttrs:
+        def __init__(self, entity_id: str):
+            self.entity_id = entity_id
+
+        @property
+        def attributes(self):
+            raise AssertionError("attributes should not be read by build_domain_health")
+
+    states = [StateNoAttrs("sensor.a"), StateNoAttrs("sensor.b"), StateNoAttrs("switch.c")]
+    noise_summary = {"domain_noise_all": {"sensor": 1200, "switch": 300}}
+
+    rows = analysis.build_domain_health(states, noise_summary)
+    by_domain = {row["domain"]: row for row in rows}
+    assert by_domain["sensor"]["noise_score"] == 1200
+    assert by_domain["switch"]["noise_score"] == 300
