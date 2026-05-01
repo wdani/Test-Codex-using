@@ -5,6 +5,7 @@ This backlog intentionally expands beyond the initial strict scope to discover h
 ## Analytics
 - Event burst detector per domain/entity.
 - Recorder growth attribution by integration from real recorder statistics.
+- Battery drain-rate forecast from real history statistics.
 - Automation effectiveness score (triggered vs. useful outcomes).
 
 ## Reliability

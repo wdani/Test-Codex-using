@@ -51,6 +51,8 @@ def build_ai_context_bundle(
                 "entities_total": summary.get("entities_total", 0),
                 "entities_unavailable_or_unknown": summary.get("entities_unavailable_or_unknown", 0),
                 "battery_entities_low": battery_summary.get("battery_entities_low", 0),
+                "battery_entities_critical": battery_summary.get("battery_entities_critical", 0),
+                "battery_entities_unknown": battery_summary.get("battery_entities_unknown", 0),
             },
             "quality_flags": {
                 "masked_export": True,
@@ -66,11 +68,14 @@ def build_ai_context_bundle(
         "action_queue": action_queue,
         "llm_context_short": {
             "high_priority_count": len(action_queue["do_first"]),
+            "battery_low_count": battery_summary.get("battery_entities_low", 0),
+            "battery_unknown_count": battery_summary.get("battery_entities_unknown", 0),
             "top_recommendations": [r["title"] for r in recommendations[:3]],
         },
         "llm_context_deep": {
             "top_noisy_entities": noise_summary.get("top_noisy_entities", [])[:20],
             "top_noisy_domains": noise_summary.get("top_noisy_domains", [])[:10],
+            "top_battery_risks": battery_summary.get("top_battery_risks", [])[:20],
             "top_recorder_volume_entities": (recorder_volume or {}).get("top_entities", [])[:10],
             "recorder_yaml_preview": recorder_advice.get("yaml_preview", {}),
         },

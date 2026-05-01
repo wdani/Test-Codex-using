@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
@@ -18,6 +19,26 @@ HIGH_CHURN_DOMAIN_FACTORS = {
     "switch": 2,
 }
 CRITICAL_CONTROL_DOMAINS = {"alarm_control_panel", "cover", "fan", "lock", "siren"}
+BATTERY_ATTRIBUTE_KEYS = (
+    "battery",
+    "battery_level",
+    "battery_percent",
+    "battery_percentage",
+    "battery_state",
+    "battery_low",
+)
+BATTERY_ENTITY_MARKERS = ("battery", "batterie", "akku")
+BATTERY_SUFFIXES = (
+    "_battery_level",
+    "_battery_percent",
+    "_battery_percentage",
+    "_battery_state",
+    "_battery_low",
+    "_battery",
+    "_batterie",
+    "_akku",
+)
+BATTERY_RISK_ORDER = {"critical": 0, "low": 1, "watch": 2, "unknown": 3, "safe": 4}
 
 
 def _entity_domain(entity_id: str) -> str:
@@ -78,29 +99,185 @@ def build_noise_summary(states: list[Any]) -> dict[str, Any]:
     }
 
 
+def _parse_battery_percent(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int | float):
+        return float(value) if 0 <= float(value) <= 100 else None
+    value_text = str(value).strip().replace(",", ".")
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", value_text)
+    if not match:
+        return None
+    percent = float(match.group(0))
+    return percent if 0 <= percent <= 100 else None
+
+
+def _battery_device_key(entity_id: str) -> str:
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    normalized = re.sub(r"[^a-z0-9_]+", "_", object_id.lower()).strip("_")
+    for suffix in BATTERY_SUFFIXES:
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)].strip("_")
+            break
+    return normalized or object_id.lower()
+
+
+def _is_battery_entity(entity_id: str, name: str, attrs: dict[str, Any]) -> bool:
+    haystack = f"{entity_id} {name}".lower()
+    if any(marker in haystack for marker in BATTERY_ENTITY_MARKERS):
+        return True
+    if str(attrs.get("device_class", "")).lower() == "battery":
+        return True
+    return False
+
+
+def _battery_risk(raw_value: Any, percent: float | None, source: str) -> tuple[str, str, str]:
+    raw_text = str(raw_value).strip().lower()
+    if raw_text in {"unavailable", "unknown", "none", ""}:
+        return (
+            "unknown",
+            "Battery signal is not reporting a usable value.",
+            "Check device connectivity and whether the battery entity is still valid.",
+        )
+    if percent is not None:
+        if percent <= 10:
+            return (
+                "critical",
+                "Battery is at or below the critical threshold.",
+                "Replace or recharge this battery as soon as possible.",
+            )
+        if percent <= 20:
+            return (
+                "low",
+                "Battery is below the maintenance threshold.",
+                "Replace or recharge this battery in the next maintenance window.",
+            )
+        if percent <= 35:
+            return (
+                "watch",
+                "Battery is trending toward the maintenance threshold.",
+                "Watch this device and plan replacement before it becomes unreliable.",
+            )
+        return ("safe", "Battery level is currently healthy.", "Keep observed.")
+
+    is_low_boolean_signal = source == "state" or source == "attribute:battery_low"
+    if is_low_boolean_signal and raw_text in {"on", "true", "1", "low", "problem", "detected"}:
+        return (
+            "low",
+            "Binary battery sensor reports a low/problem state.",
+            "Replace or recharge this battery in the next maintenance window.",
+        )
+    if raw_text in {"critical", "empty"}:
+        return (
+            "critical",
+            "Battery signal reports a critical state.",
+            "Replace or recharge this battery as soon as possible.",
+        )
+    if raw_text in {"low", "problem"}:
+        return (
+            "low",
+            "Battery signal reports a low/problem state.",
+            "Replace or recharge this battery in the next maintenance window.",
+        )
+    if raw_text in {"off", "false", "0", "ok", "normal", "healthy", "full", "charging"}:
+        return ("safe", "Battery signal reports a healthy state.", "Keep observed.")
+    return (
+        "unknown",
+        "Battery signal is present but not numeric or classified.",
+        "Check this entity manually to confirm the battery state.",
+    )
+
+
+def _battery_signals_for_state(state: Any) -> list[dict[str, Any]]:
+    entity_id = getattr(state, "entity_id", "")
+    name = getattr(state, "name", "") or ""
+    attrs = getattr(state, "attributes", {}) or {}
+    signals = []
+
+    if _is_battery_entity(entity_id, name, attrs):
+        signals.append({"source": "state", "raw_value": getattr(state, "state", None)})
+
+    for key in BATTERY_ATTRIBUTE_KEYS:
+        if key in attrs:
+            signals.append({"source": f"attribute:{key}", "raw_value": attrs.get(key)})
+
+    return signals
+
+
+def _battery_sort_key(item: dict[str, Any]) -> tuple[int, float, str]:
+    percent = item.get("percent", item.get("lowest_percent"))
+    identifier = item.get("entity_id", item.get("device_key", ""))
+    return (
+        BATTERY_RISK_ORDER.get(str(item.get("risk_level")), 99),
+        float(percent) if percent is not None else 101.0,
+        str(identifier),
+    )
+
+
 def build_battery_summary(states: list[Any]) -> dict[str, Any]:
     battery_entities = []
+    by_device: dict[str, dict[str, Any]] = {}
+
     for state in states:
         entity_id = getattr(state, "entity_id", "")
         state_name = getattr(state, "name", "")
-        if entity_id.startswith("sensor.") and (
-            "battery" in entity_id.lower() or "battery" in state_name.lower()
-        ):
-            value = getattr(state, "state", None)
-            battery_entities.append({"entity_id": entity_id, "state": value})
+        device_key = _battery_device_key(entity_id)
+        for signal in _battery_signals_for_state(state):
+            raw_value = signal["raw_value"]
+            percent = _parse_battery_percent(raw_value)
+            risk, reason, action = _battery_risk(raw_value, percent, signal["source"])
+            item = {
+                "entity_id": entity_id,
+                "name": state_name,
+                "device_key": device_key,
+                "source": signal["source"],
+                "state": raw_value,
+                "percent": percent,
+                "risk_level": risk,
+                "reason": reason,
+                "recommended_action": action,
+            }
+            battery_entities.append(item)
 
-    low = []
-    for item in battery_entities:
-        try:
-            if float(item["state"]) <= 20:
-                low.append(item)
-        except (TypeError, ValueError):
-            continue
+            group = by_device.setdefault(
+                device_key,
+                {
+                    "device_key": device_key,
+                    "signals": 0,
+                    "lowest_percent": None,
+                    "risk_level": "safe",
+                    "entities": [],
+                },
+            )
+            group["signals"] += 1
+            if entity_id not in group["entities"]:
+                group["entities"].append(entity_id)
+            if percent is not None and (group["lowest_percent"] is None or percent < group["lowest_percent"]):
+                group["lowest_percent"] = percent
+            if BATTERY_RISK_ORDER[risk] < BATTERY_RISK_ORDER[group["risk_level"]]:
+                group["risk_level"] = risk
+
+    battery_entities.sort(key=_battery_sort_key)
+    grouped_devices = sorted(by_device.values(), key=_battery_sort_key)
+    low = [item for item in battery_entities if item["risk_level"] in {"critical", "low"}]
+    critical = [item for item in battery_entities if item["risk_level"] == "critical"]
+    watch = [item for item in battery_entities if item["risk_level"] == "watch"]
+    unknown = [item for item in battery_entities if item["risk_level"] == "unknown"]
 
     return {
         "battery_entities_total": len(battery_entities),
         "battery_entities_low": len(low),
+        "battery_entities_critical": len(critical),
+        "battery_entities_watch": len(watch),
+        "battery_entities_unknown": len(unknown),
         "low_battery_entities": low[:50],
+        "top_battery_risks": [item for item in battery_entities if item["risk_level"] != "safe"][:50],
+        "by_device": grouped_devices[:50],
+        "maintenance_queue": low[:20],
+        "notes": [
+            "Battery detection uses entity ids, names, device_class=battery, and common battery attributes.",
+            "Binary low-battery sensors are treated as maintenance signals even when no percentage is available.",
+        ],
     }
 
 
@@ -158,7 +335,19 @@ def generate_recommendations(
             )
         )
 
-    if battery_summary.get("battery_entities_low", 0) > 0:
+    if battery_summary.get("battery_entities_critical", 0) > 0:
+        recs.append(
+            _rec(
+                "battery-critical",
+                "high",
+                "Critical battery devices detected",
+                "At least one battery signal is critical; these devices can make automations unreliable.",
+                "Replace/recharge critical batteries as soon as possible.",
+                "battery",
+                0.92,
+            )
+        )
+    elif battery_summary.get("battery_entities_low", 0) > 0:
         recs.append(
             _rec(
                 "battery-attention",
@@ -168,6 +357,32 @@ def generate_recommendations(
                 "Replace/recharge low battery devices in the next maintenance window.",
                 "battery",
                 0.9,
+            )
+        )
+
+    if battery_summary.get("battery_entities_unknown", 0) > 0:
+        recs.append(
+            _rec(
+                "battery-signal-health",
+                "medium",
+                "Battery signals need review",
+                "Some battery-related entities are unavailable, unknown, or not machine-readable.",
+                "Open the battery health list and verify these devices before relying on battery automations.",
+                "battery",
+                0.68,
+            )
+        )
+
+    if battery_summary.get("battery_entities_watch", 0) > 0:
+        recs.append(
+            _rec(
+                "battery-watchlist",
+                "low",
+                "Battery watchlist available",
+                "Some devices are above the low threshold but close enough to plan maintenance.",
+                "Review watch-level batteries during routine maintenance.",
+                "battery",
+                0.65,
             )
         )
 

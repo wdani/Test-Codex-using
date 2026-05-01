@@ -10,6 +10,11 @@ const I18N = {
     entities: "Entities",
     unavailable: "Unavailable/Unknown",
     lowBattery: "Low battery",
+    criticalBattery: "Critical battery",
+    watchBattery: "Watch battery",
+    unknownBattery: "Unknown battery",
+    batteryHealth: "Battery health",
+    maintenanceQueue: "Maintenance queue",
     next: "Next",
     error: "Error",
     score: "score",
@@ -49,6 +54,11 @@ const I18N = {
     entities: "Entitäten",
     unavailable: "Nicht verfügbar/Unbekannt",
     lowBattery: "Niedriger Batteriestand",
+    criticalBattery: "Kritischer Batteriestand",
+    watchBattery: "Batterie beobachten",
+    unknownBattery: "Unklare Batterie",
+    batteryHealth: "Batterie-Gesundheit",
+    maintenanceQueue: "Wartungsliste",
     next: "Nächster Schritt",
     error: "Fehler",
     score: "Score",
@@ -112,6 +122,10 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .risk-safe { background:#2e7d3233; color:#2e7d32; }
         .risk-review { background:#f9a82533; color:#8d6e00; }
         .risk-aggressive { background:#c6282833; color:#b71c1c; }
+        .risk-critical { background:#b71c1c33; color:#b71c1c; }
+        .risk-low { background:#e6510033; color:#bf360c; }
+        .risk-watch { background:#f9a82533; color:#8d6e00; }
+        .risk-unknown { background:#61616133; color:#424242; }
         .hint { font-size:12px; color:var(--secondary-text-color); }
         pre { white-space:pre-wrap; overflow:auto; max-height:420px; }
         @media (max-width: 700px) { .kpi { min-width:unset; width:100%; } }
@@ -119,6 +133,11 @@ class HaContextExplorerNextPanel extends HTMLElement {
       <ha-card header="${t(this._lang, "title")}">
         <div class="grid" style="padding:16px;">
           <div id="kpis" class="kpis"></div>
+          <div class="card">
+            <h3>${t(this._lang, "batteryHealth")}</h3>
+            <div class="hint" id="batterySummary"></div>
+            <table id="batteryTable"></table>
+          </div>
           <div class="card">
             <h3>${t(this._lang, "topNoisy")}</h3>
             <ul id="noise"></ul>
@@ -295,6 +314,21 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .join("")}</tbody>`;
   }
 
+  _renderBatteryHealth(battery) {
+    const risks = (battery?.top_battery_risks || []).slice(0, 8);
+    this.querySelector("#batterySummary").textContent =
+      `${t(this._lang, "criticalBattery")}: ${battery?.battery_entities_critical || 0}, ` +
+      `${t(this._lang, "lowBattery")}: ${battery?.battery_entities_low || 0}, ` +
+      `${t(this._lang, "watchBattery")}: ${battery?.battery_entities_watch || 0}, ` +
+      `${t(this._lang, "unknownBattery")}: ${battery?.battery_entities_unknown || 0}`;
+
+    this.querySelector("#batteryTable").innerHTML = `
+      <thead><tr><th>Entity</th><th>Device</th><th>%</th><th>${t(this._lang, "risk")}</th><th>${t(this._lang, "next")}</th></tr></thead>
+      <tbody>${risks
+        .map((r) => `<tr><td>${this._escape(r.entity_id)}</td><td>${this._escape(r.device_key)}</td><td>${this._escape(r.percent ?? "-")}</td><td>${this._riskBadge(r.risk_level)}</td><td>${this._escape(r.recommended_action)}</td></tr>`)
+        .join("")}</tbody>`;
+  }
+
   _setDiagnosticsCopyDisabled(disabled) {
     const button = this.querySelector("#copyDiagnosticsBtn");
     if (button) button.disabled = disabled;
@@ -355,11 +389,13 @@ class HaContextExplorerNextPanel extends HTMLElement {
       const entitiesTotal = payload.summary?.entities_total ?? 0;
       const unavailable = payload.summary?.entities_unavailable_or_unknown ?? 0;
       const batteryLow = payload.battery?.battery_entities_low ?? 0;
+      const batteryCritical = payload.battery?.battery_entities_critical ?? 0;
       const topNoise = (payload.noise?.top_noisy_entities || []).slice(0, 5);
 
       this.querySelector("#kpis").innerHTML = [
         this._kpi(t(this._lang, "entities"), entitiesTotal),
         this._kpi(t(this._lang, "unavailable"), unavailable),
+        this._kpi(t(this._lang, "criticalBattery"), batteryCritical),
         this._kpi(t(this._lang, "lowBattery"), batteryLow),
       ].join("");
 
@@ -381,6 +417,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
       const recorderAdvice = payload.recorder_advice || {};
       this.querySelector("#recorder").textContent = JSON.stringify(recorderAdvice.yaml_preview || {}, null, 2);
+      this._renderBatteryHealth(payload.battery || {});
       this._renderRecorderVolume(payload.recorder_volume || {});
 
       const domains = ["all", ...new Set((recorderAdvice.entity_suggestions || []).map((r) => r.domain))];
