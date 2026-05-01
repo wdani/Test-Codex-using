@@ -178,15 +178,52 @@ class HaContextExplorerNextPanel extends HTMLElement {
     return msgText;
   }
 
+  async _writeClipboard(text) {
+    const value = text ?? "";
+    const clipboard = globalThis.navigator?.clipboard;
+    if (clipboard?.writeText) {
+      await clipboard.writeText(value);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, value.length);
+
+    try {
+      if (!document.execCommand("copy")) {
+        throw new Error("Clipboard copy is not available in this browser context");
+      }
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  _setExportCopyDisabled(disabled) {
+    ["#copyExportBtn", "#copyShortBtn", "#copyFirstBtn"].forEach((selector) => {
+      const button = this.querySelector(selector);
+      if (button) button.disabled = disabled;
+    });
+  }
+
   async _loadExport() {
     const level = this._exportLevel;
     const path = `ha_context_explorer_next/export/ai_context/${level}`;
+    this._setExportCopyDisabled(true);
     try {
       const payload = await this._hass.callApi("GET", path);
       this._exportPayload = payload;
       const firstCount = payload?.action_queue?.do_first?.length || 0;
       this.querySelector("#exportHint").textContent = `level=${level}, do_first=${firstCount}`;
       this.querySelector("#exportPreview").textContent = JSON.stringify(payload, null, 2);
+      this._setExportCopyDisabled(false);
     } catch (err) {
       this._exportPayload = null;
       this.querySelector("#exportHint").textContent = `${t(this._lang, "error")}: ${this._formatError(err)}`;
@@ -238,7 +275,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
       this.querySelector("#copyYamlBtn").onclick = async () => {
         try {
-          await navigator.clipboard.writeText(this.querySelector("#recorder").textContent || "");
+          await this._writeClipboard(this.querySelector("#recorder").textContent || "");
           this.querySelector("#copyState").textContent = t(this._lang, "copied");
         } catch (e) {
           this.querySelector("#copyState").textContent = `${t(this._lang, "error")}: ${e}`;
@@ -252,14 +289,14 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
       const copyText = async (text) => {
         try {
-          await navigator.clipboard.writeText(text);
+          await this._writeClipboard(text);
           this.querySelector("#exportCopyState").textContent = t(this._lang, "copied");
         } catch (e) {
           this.querySelector("#exportCopyState").textContent = `${t(this._lang, "error")}: ${this._formatError(e)}`;
         }
       };
 
-      this.querySelector("#copyExportBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload || {}, null, 2));
+      this.querySelector("#copyExportBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload, null, 2));
       this.querySelector("#copyShortBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.llm_context_short || {}, null, 2));
       this.querySelector("#copyFirstBtn").onclick = async () => copyText(JSON.stringify(this._exportPayload?.action_queue?.do_first || [], null, 2));
 
