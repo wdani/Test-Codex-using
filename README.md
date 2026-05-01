@@ -27,6 +27,10 @@ HA Context Explorer Next helps users understand:
 
 This repository is an active prototype.
 
+## Development
+
+Local setup and Windows Git line-ending guidance live in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+
 ## Privacy key configuration
 
 For production-like usage, set a unique mask key so deterministic masking tokens are not derived from the default fallback key.
