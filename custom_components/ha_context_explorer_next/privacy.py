@@ -68,10 +68,15 @@ def mask_text(value: str) -> str:
 
 def _text_pattern_counts(value: str) -> Counter[str]:
     counts: Counter[str] = Counter()
+    remaining = value
     for name, regex in TEXT_PATTERN_RULES:
-        matches = regex.findall(value)
+        matches = list(regex.finditer(remaining))
         if matches:
             counts[name] += len(matches)
+            chars = list(remaining)
+            for match in matches:
+                chars[match.start() : match.end()] = " " * (match.end() - match.start())
+            remaining = "".join(chars)
     return counts
 
 

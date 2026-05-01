@@ -99,3 +99,15 @@ def test_privacy_coverage_reports_counts_without_raw_values():
     assert "192.168.1.10" not in coverage_text
     assert "AA:BB:CC:DD:EE:FF" not in coverage_text
     assert "admin@example.com" not in coverage_text
+
+
+def test_privacy_coverage_counts_mac_without_false_ipv6_hit():
+    class State:
+        entity_id = "sensor.router"
+        state = "online"
+        name = "Router"
+        attributes = {"mac": "AA:BB:CC:DD:EE:FF"}
+
+    coverage = privacy.build_privacy_coverage([State()])
+    assert coverage["text_pattern_hits"]["mac"] == 1
+    assert "ipv6" not in coverage["text_pattern_hits"]
