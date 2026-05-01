@@ -22,6 +22,9 @@ const I18N = {
     copyFirst: "Copy do_first",
     domainHealth: "Domain health matrix",
     keyHint: "Set HCX_MASK_KEY to enable export endpoints.",
+    privacyStatus: "Privacy/export status",
+    exportsReady: "Exports enabled",
+    exportsLocked: "Exports locked",
   },
   de: {
     title: "HA Context Explorer Next",
@@ -46,6 +49,9 @@ const I18N = {
     copyFirst: "do_first kopieren",
     domainHealth: "Domain-Gesundheitsmatrix",
     keyHint: "Setze HCX_MASK_KEY, um Export-Endpunkte zu aktivieren.",
+    privacyStatus: "Datenschutz/Export-Status",
+    exportsReady: "Exporte aktiv",
+    exportsLocked: "Exporte gesperrt",
   },
 };
 
@@ -110,6 +116,10 @@ class HaContextExplorerNextPanel extends HTMLElement {
           <div class="card">
             <h3>${t(this._lang, "domainHealth")}</h3>
             <table id="domainHealthTable"></table>
+          </div>
+          <div class="card">
+            <h3>${t(this._lang, "privacyStatus")}</h3>
+            <div class="hint" id="privacyStatus"></div>
           </div>
           <div class="card">
             <h3>${t(this._lang, "exportWorkbench")}</h3>
@@ -254,6 +264,11 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .map((d) => `<tr><td>${d.domain}</td><td>${d.entities}</td><td>${d.noise_score}</td><td>${d.noise_density}</td><td>${this._riskBadge(d.risk)}</td></tr>`)
         .join("");
       this.querySelector("#domainHealthTable").innerHTML = `<thead><tr><th>Domain</th><th>Entities</th><th>Score</th><th>Density</th><th>Risk</th></tr></thead><tbody>${domainHealthRows}</tbody>`;
+
+      const privacy = payload.privacy || {};
+      this.querySelector("#privacyStatus").textContent = privacy.exports_enabled
+        ? t(this._lang, "exportsReady")
+        : `${t(this._lang, "exportsLocked")} - ${t(this._lang, "keyHint")}`;
 
       const recorderAdvice = payload.recorder_advice || {};
       this.querySelector("#recorder").textContent = JSON.stringify(recorderAdvice.yaml_preview || {}, null, 2);

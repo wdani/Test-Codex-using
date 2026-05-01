@@ -16,6 +16,7 @@ This backlog intentionally expands beyond the initial strict scope to discover h
 - Configurable masking profiles (safe-share, team-debug, local-dev).
 - Mask preview diff view before export.
 - Stable pseudonyms with per-export salt options.
+- Privacy coverage report for masked fields and unmasked structure.
 
 ## AI Assistance
 - LLM-oriented context packs (short, medium, deep).
@@ -26,3 +27,8 @@ This backlog intentionally expands beyond the initial strict scope to discover h
 - Recommendation inbox with status tracking (new/accepted/dismissed).
 - Explain-why cards for each recommendation.
 - Internationalization bundles (EN baseline, DE next).
+
+## Developer Tooling
+- Diagnostics endpoint for support handovers and Codex context.
+- UI render snapshot export for reviewing panel readability.
+- Self-check that explains missing configuration such as `HCX_MASK_KEY`.
