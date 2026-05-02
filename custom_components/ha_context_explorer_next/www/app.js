@@ -51,6 +51,10 @@ const I18N = {
     estimatedBytes: "Estimated bytes/day",
     hotspots: "Hotspots",
     panelLoadFailed: "Panel could not load",
+    loading: "Loading...",
+    reload: "Reload",
+    retry: "Retry",
+    lastUpdated: "Last updated",
   },
   de: {
     title: "HA Context Explorer Next",
@@ -104,6 +108,10 @@ const I18N = {
     estimatedBytes: "Geschaetzte Bytes/Tag",
     hotspots: "Hotspots",
     panelLoadFailed: "Panel konnte nicht geladen werden",
+    loading: "Laedt...",
+    reload: "Neu laden",
+    retry: "Erneut versuchen",
+    lastUpdated: "Zuletzt aktualisiert",
   },
 };
 
@@ -122,7 +130,8 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this._domain = "all";
       this._exportLevel = "short";
       this.render();
-      this.load().catch((err) => this._showFatalError(err));
+      this._attachStaticHandlers();
+      this._reload().catch((err) => this._showFatalError(err));
     }
   }
 
@@ -134,6 +143,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .kpi { padding:8px 10px; border:1px solid var(--divider-color); border-radius:10px; min-width:120px; }
         .card { padding:12px; border:1px solid var(--divider-color); border-radius:10px; background:var(--card-background-color, transparent); }
         .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .topbar { justify-content:space-between; }
         table { width:100%; border-collapse:collapse; }
         th, td { border-bottom:1px solid var(--divider-color); padding:6px; text-align:left; }
         .risk { padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
@@ -151,6 +161,10 @@ class HaContextExplorerNextPanel extends HTMLElement {
       <ha-card header="${t(this._lang, "title")}">
         <div class="grid" style="padding:16px;">
           <div id="kpis" class="kpis"></div>
+          <div class="controls topbar">
+            <button id="refreshBtn" type="button">${t(this._lang, "reload")}</button>
+            <small id="lastUpdated">${t(this._lang, "loading")}</small>
+          </div>
           <div class="card">
             <h3>${t(this._lang, "batteryHealth")}</h3>
             <div class="hint" id="batterySummary"></div>
@@ -223,6 +237,13 @@ class HaContextExplorerNextPanel extends HTMLElement {
         </div>
       </ha-card>
     `;
+  }
+
+  _attachStaticHandlers() {
+    const refreshButton = this.querySelector("#refreshBtn");
+    if (refreshButton) {
+      refreshButton.onclick = async () => this._reload();
+    }
   }
 
   _riskBadge(risk) {
@@ -315,6 +336,21 @@ class HaContextExplorerNextPanel extends HTMLElement {
     if (element) element.textContent = text;
   }
 
+  _setLoadingState(isLoading) {
+    const refreshButton = this.querySelector("#refreshBtn");
+    if (refreshButton) refreshButton.disabled = isLoading;
+    if (isLoading) this._setText("#lastUpdated", t(this._lang, "loading"));
+  }
+
+  async _reload() {
+    this._setLoadingState(true);
+    try {
+      await this.load();
+    } finally {
+      this._setLoadingState(false);
+    }
+  }
+
   _showFatalError(err) {
     const message = this._formatError(err);
     globalThis.console?.warn?.(`HA Context Explorer Next panel load failed: ${message}`);
@@ -323,9 +359,18 @@ class HaContextExplorerNextPanel extends HTMLElement {
         <div style="padding:16px">
           <b>${t(this._lang, "panelLoadFailed")}</b>
           <div class="hint">${this._escape(message)}</div>
+          <p><button id="retryLoadBtn" type="button">${t(this._lang, "retry")}</button></p>
         </div>
       </ha-card>
     `;
+    const retryButton = this.querySelector("#retryLoadBtn");
+    if (retryButton) {
+      retryButton.onclick = async () => {
+        this.render();
+        this._attachStaticHandlers();
+        await this._reload();
+      };
+    }
   }
 
   _downloadJson(filename, payload) {
@@ -593,6 +638,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       await this._loadExport();
 
       this.querySelector("#recs").innerHTML = (payload.recommendations || []).map((rec) => this._rec(rec)).join("");
+      this._setText("#lastUpdated", `${t(this._lang, "lastUpdated")}: ${new Date().toLocaleTimeString()}`);
     } catch (err) {
       this._showFatalError(err);
     }
