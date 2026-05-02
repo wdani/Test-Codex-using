@@ -44,7 +44,9 @@ def test_build_snapshot_payload_shape():
         "recorder_volume",
         "domain_health",
         "privacy",
+        "panel",
     }
+    assert payload["panel"]["frontend_version"]
 
 
 def test_build_ai_export_payload_contains_sections():
@@ -67,6 +69,8 @@ def test_build_ui_context_payload_describes_visible_panel_without_raw_sensitive_
         key_source="managed_storage",
     )
     assert payload["source"] == "panel_user_visible_context"
+    assert payload["panel"]["frontend_version"]
+    assert payload["panel"]["module_url"].endswith(f"?v={payload['panel']['frontend_version']}")
     assert payload["privacy"]["masked"] is True
     assert payload["privacy"]["raw_key_included"] is False
     assert "192.168.1.10" not in str(payload)
@@ -195,6 +199,7 @@ def test_diagnostics_payload_explains_export_block(monkeypatch):
     diagnostics = service.build_diagnostics_payload([_state("sensor.temp", "20", {"email": "admin@example.com"})])
     assert diagnostics["export"]["enabled"] is False
     assert diagnostics["export"]["blocked_reason"] == "Privacy mask key missing"
+    assert diagnostics["integration"]["panel_frontend_version"]
     assert "battery_health" in diagnostics["capabilities"]
     assert "managed_privacy_key" in diagnostics["capabilities"]
     assert "privacy_key_backup" in diagnostics["capabilities"]

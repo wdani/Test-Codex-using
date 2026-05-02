@@ -12,12 +12,20 @@ from .analysis import (
     build_recorder_volume_summary,
     generate_recommendations,
 )
-from .const import DOMAIN, PANEL_MODULE_URL, PANEL_URL
+from .const import DOMAIN, PANEL_FRONTEND_VERSION, PANEL_MODULE_URL, PANEL_URL
 from .exporter import build_ai_context_bundle
 from .privacy import build_privacy_coverage, build_privacy_status, has_custom_mask_key, mask_payload
 
 EXPORT_LEVELS = {"short", "deep"}
 UI_CONTEXT_VERSION = "1.0.0"
+
+
+def build_panel_metadata() -> dict[str, str]:
+    return {
+        "url": PANEL_URL,
+        "module_url": PANEL_MODULE_URL,
+        "frontend_version": PANEL_FRONTEND_VERSION,
+    }
 
 
 def build_snapshot_payload(
@@ -43,6 +51,7 @@ def build_snapshot_payload(
         "recorder_volume": recorder_volume,
         "domain_health": domain_health,
         "privacy": privacy,
+        "panel": build_panel_metadata(),
     }
 
 
@@ -271,8 +280,7 @@ def build_ui_context_payload(
         },
         "panel": {
             "title": "HA Context Explorer Next",
-            "url": PANEL_URL,
-            "module_url": PANEL_MODULE_URL,
+            **build_panel_metadata(),
             "initial_export_level": "short",
             "reading_order": [section["id"] for section in sections],
         },
@@ -304,6 +312,7 @@ def build_diagnostics_payload(
             "domain": DOMAIN,
             "panel_url": PANEL_URL,
             "panel_module_url": PANEL_MODULE_URL,
+            "panel_frontend_version": PANEL_FRONTEND_VERSION,
         },
         "capabilities": [
             "summary",
