@@ -1,3 +1,5 @@
+const PANEL_FRONTEND_VERSION = "0.1.1";
+
 const I18N = {
   en: {
     title: "HA Context Explorer Next",
@@ -58,6 +60,9 @@ const I18N = {
     reload: "Reload",
     retry: "Retry",
     lastUpdated: "Last updated",
+    frontendVersion: "Frontend version",
+    serverVersion: "Server version",
+    cacheMismatch: "Cache mismatch; reload Home Assistant",
   },
   de: {
     title: "HA Context Explorer Next",
@@ -118,6 +123,9 @@ const I18N = {
     reload: "Neu laden",
     retry: "Erneut versuchen",
     lastUpdated: "Zuletzt aktualisiert",
+    frontendVersion: "Frontend-Version",
+    serverVersion: "Server-Version",
+    cacheMismatch: "Cache-Mismatch; Home Assistant neu laden",
   },
 };
 
@@ -150,6 +158,8 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .card { padding:12px; border:1px solid var(--divider-color); border-radius:10px; background:var(--card-background-color, transparent); }
         .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .topbar { justify-content:space-between; }
+        .status-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .warning { color:var(--error-color, #b71c1c); font-weight:600; }
         .action-list { display:grid; gap:8px; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }
         .action-item { border-left:4px solid var(--primary-color); padding:8px 10px; background:var(--secondary-background-color, transparent); }
         table { width:100%; border-collapse:collapse; }
@@ -171,7 +181,10 @@ class HaContextExplorerNextPanel extends HTMLElement {
           <div id="kpis" class="kpis"></div>
           <div class="controls topbar">
             <button id="refreshBtn" type="button">${t(this._lang, "reload")}</button>
-            <small id="lastUpdated">${t(this._lang, "loading")}</small>
+            <span class="status-row">
+              <small id="panelVersion">${t(this._lang, "frontendVersion")} ${PANEL_FRONTEND_VERSION}</small>
+              <small id="lastUpdated">${t(this._lang, "loading")}</small>
+            </span>
           </div>
           <div class="card">
             <h3>${t(this._lang, "actionOverview")}</h3>
@@ -286,6 +299,19 @@ class HaContextExplorerNextPanel extends HTMLElement {
           <div>${this._escape(rec.next_action || rec.detail || "-")}</div>
         </div>`)
       .join("");
+  }
+
+  _renderPanelMeta(panel) {
+    const target = this.querySelector("#panelVersion");
+    if (!target) return;
+    const expected = panel?.frontend_version || "";
+    const loaded = PANEL_FRONTEND_VERSION;
+    const mismatch = Boolean(expected && expected !== loaded);
+    const serverText = mismatch ? `, ${t(this._lang, "serverVersion")} ${expected}` : "";
+    const mismatchText = mismatch ? ` - ${t(this._lang, "cacheMismatch")}` : "";
+    target.textContent = `${t(this._lang, "frontendVersion")} ${loaded}${serverText}${mismatchText}`;
+    target.title = panel?.module_url || "";
+    target.classList.toggle("warning", mismatch);
   }
 
   _formatBytes(value) {
@@ -584,6 +610,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
   async load() {
     try {
       const payload = await this._hass.callApi("GET", "ha_context_explorer_next/summary");
+      this._renderPanelMeta(payload.panel || {});
       const entitiesTotal = payload.summary?.entities_total ?? 0;
       const unavailable = payload.summary?.entities_unavailable_or_unknown ?? 0;
       const batteryLow = payload.battery?.battery_entities_low ?? 0;
