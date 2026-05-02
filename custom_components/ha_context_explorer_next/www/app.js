@@ -1,4 +1,4 @@
-const PANEL_FRONTEND_VERSION = "0.1.2";
+const PANEL_FRONTEND_VERSION = "0.1.3";
 
 const I18N = {
   en: {
@@ -152,18 +152,21 @@ class HaContextExplorerNextPanel extends HTMLElement {
   render() {
     this.innerHTML = `
       <style>
+        :host { display:block; }
         .grid { display:grid; gap:12px; }
         .kpis { display:flex; gap:8px; flex-wrap:wrap; }
-        .kpi { padding:8px 10px; border:1px solid var(--divider-color); border-radius:10px; min-width:120px; }
-        .card { padding:12px; border:1px solid var(--divider-color); border-radius:10px; background:var(--card-background-color, transparent); }
+        .kpi { padding:8px 10px; border:1px solid var(--divider-color); border-radius:8px; min-width:120px; }
+        .card { padding:12px; border:1px solid var(--divider-color); border-radius:8px; background:var(--card-background-color, transparent); }
+        .card h3 { margin:0 0 10px; }
         .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .topbar { justify-content:space-between; }
         .status-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
         .warning { color:var(--error-color, #b71c1c); font-weight:600; }
         .action-list { display:grid; gap:8px; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }
-        .action-item { border-left:4px solid var(--primary-color); padding:8px 10px; background:var(--secondary-background-color, transparent); }
-        table { width:100%; border-collapse:collapse; }
-        th, td { border-bottom:1px solid var(--divider-color); padding:6px; text-align:left; }
+        .action-item { border-left:4px solid var(--primary-color); padding:8px 10px; background:var(--secondary-background-color, transparent); overflow-wrap:anywhere; }
+        .table-wrap { width:100%; overflow-x:auto; }
+        table { width:100%; min-width:720px; border-collapse:collapse; }
+        th, td { border-bottom:1px solid var(--divider-color); padding:6px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
         .risk { padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
         .risk-safe { background:#2e7d3233; color:#2e7d32; }
         .risk-review { background:#f9a82533; color:#8d6e00; }
@@ -173,7 +176,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .risk-watch { background:#f9a82533; color:#8d6e00; }
         .risk-unknown { background:#61616133; color:#424242; }
         .hint { font-size:12px; color:var(--secondary-text-color); }
-        pre { white-space:pre-wrap; overflow:auto; max-height:420px; }
+        pre { white-space:pre-wrap; overflow:auto; max-height:420px; overflow-wrap:anywhere; }
         @media (max-width: 700px) { .kpi { min-width:unset; width:100%; } }
       </style>
       <ha-card header="${t(this._lang, "title")}">
@@ -193,7 +196,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
           <div class="card">
             <h3>${t(this._lang, "batteryHealth")}</h3>
             <div class="hint" id="batterySummary"></div>
-            <table id="batteryTable"></table>
+            <div class="table-wrap"><table id="batteryTable"></table></div>
           </div>
           <div class="card">
             <h3>${t(this._lang, "topNoisy")}</h3>
@@ -211,17 +214,17 @@ class HaContextExplorerNextPanel extends HTMLElement {
               <button id="copyYamlBtn" type="button">${t(this._lang, "copyYaml")}</button>
               <small id="copyState"></small>
             </div>
-            <table id="recorderTable"></table>
+            <div class="table-wrap"><table id="recorderTable"></table></div>
             <pre id="recorder"></pre>
           </div>
           <div class="card">
             <h3>${t(this._lang, "recorderVolume")}</h3>
             <div class="hint" id="recorderVolumeSummary"></div>
-            <table id="recorderVolumeTable"></table>
+            <div class="table-wrap"><table id="recorderVolumeTable"></table></div>
           </div>
           <div class="card">
             <h3>${t(this._lang, "domainHealth")}</h3>
-            <table id="domainHealthTable"></table>
+            <div class="table-wrap"><table id="domainHealthTable"></table></div>
           </div>
           <div class="card">
             <h3>${t(this._lang, "privacyStatus")}</h3>
@@ -272,15 +275,20 @@ class HaContextExplorerNextPanel extends HTMLElement {
   }
 
   _riskBadge(risk) {
-    return `<span class="risk risk-${risk}">${risk}</span>`;
+    const label = String(risk || "unknown");
+    const cssRisk = label.toLowerCase().replace(/[^a-z0-9_-]/g, "") || "unknown";
+    return `<span class="risk risk-${cssRisk}">${this._escape(label)}</span>`;
   }
 
   _kpi(label, value) {
-    return `<div class="kpi"><b>${value}</b><br><small>${label}</small></div>`;
+    return `<div class="kpi"><b>${this._escape(value)}</b><br><small>${this._escape(label)}</small></div>`;
   }
 
   _rec(rec) {
-    return `<div class="card"><b>[${rec.severity.toUpperCase()}] ${rec.title}</b><div>${rec.detail}</div><small>category=${rec.category || "general"}, confidence=${rec.confidence ?? "-"}</small><br><small><b>${t(this._lang, "next")}:</b> ${rec.next_action || "-"}</small></div>`;
+    const severity = this._escape(String(rec.severity || "").toUpperCase());
+    const category = this._escape(rec.category || "general");
+    const confidence = this._escape(rec.confidence ?? "-");
+    return `<div class="card"><b>[${severity}] ${this._escape(rec.title)}</b><div>${this._escape(rec.detail)}</div><small>category=${category}, confidence=${confidence}</small><br><small><b>${t(this._lang, "next")}:</b> ${this._escape(rec.next_action || "-")}</small></div>`;
   }
 
   _renderActionOverview(recommendations) {
@@ -348,7 +356,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
     this.querySelector("#recorderTable").innerHTML = `
       <thead><tr><th>Entity</th><th>Domain</th><th>${t(this._lang, "score")}</th><th>${t(this._lang, "risk")}</th></tr></thead>
       <tbody>${rows
-        .map((r) => `<tr><td>${r.entity_id}</td><td>${r.domain}</td><td>${r.noise_score}</td><td>${this._riskBadge(r.risk_level)}</td></tr>`)
+        .map((r) => `<tr><td>${this._escape(r.entity_id)}</td><td>${this._escape(r.domain)}</td><td>${this._escape(r.noise_score)}</td><td>${this._riskBadge(r.risk_level)}</td></tr>`)
         .join("")}</tbody>`;
   }
 
@@ -626,13 +634,13 @@ class HaContextExplorerNextPanel extends HTMLElement {
       ].join("");
 
       this.querySelector("#noise").innerHTML = topNoise
-        .map((item) => `<li>${item.entity_id} — ${t(this._lang, "score")} ${item.noise_score}</li>`)
+        .map((item) => `<li>${this._escape(item.entity_id)} — ${t(this._lang, "score")} ${this._escape(item.noise_score)}</li>`)
         .join("");
       this._renderActionOverview(recommendations);
 
 
       const domainHealthRows = (payload.domain_health || [])
-        .map((d) => `<tr><td>${d.domain}</td><td>${d.entities}</td><td>${d.noise_score}</td><td>${d.noise_density}</td><td>${this._riskBadge(d.risk)}</td></tr>`)
+        .map((d) => `<tr><td>${this._escape(d.domain)}</td><td>${this._escape(d.entities)}</td><td>${this._escape(d.noise_score)}</td><td>${this._escape(d.noise_density)}</td><td>${this._riskBadge(d.risk)}</td></tr>`)
         .join("");
       this.querySelector("#domainHealthTable").innerHTML = `<thead><tr><th>Domain</th><th>Entities</th><th>Score</th><th>Density</th><th>Risk</th></tr></thead><tbody>${domainHealthRows}</tbody>`;
 
@@ -647,7 +655,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
       const domains = ["all", ...new Set((recorderAdvice.entity_suggestions || []).map((r) => r.domain))];
       this.querySelector("#domainSelect").innerHTML = domains
-        .map((d) => `<option value="${d}">${d}</option>`)
+        .map((d) => `<option value="${this._escape(d)}">${this._escape(d)}</option>`)
         .join("");
 
       this.querySelector("#domainSelect").onchange = (e) => {
