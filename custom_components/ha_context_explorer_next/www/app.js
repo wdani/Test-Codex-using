@@ -3,6 +3,9 @@ const I18N = {
     title: "HA Context Explorer Next",
     topNoisy: "Top noisy entities",
     recommendations: "Recommendations",
+    actionOverview: "Action overview",
+    noUrgentActions: "No urgent actions",
+    priority: "Priority",
     recorderAdvice: "Recorder advice",
     recorderVolume: "Recorder/logbook volume",
     copyYaml: "Copy YAML",
@@ -60,6 +63,9 @@ const I18N = {
     title: "HA Context Explorer Next",
     topNoisy: "Entitäten mit hoher Last",
     recommendations: "Empfehlungen",
+    actionOverview: "Aktionen",
+    noUrgentActions: "Keine dringenden Aktionen",
+    priority: "Prioritaet",
     recorderAdvice: "Recorder-Hinweise",
     recorderVolume: "Recorder/Logbook-Volumen",
     copyYaml: "YAML kopieren",
@@ -144,6 +150,8 @@ class HaContextExplorerNextPanel extends HTMLElement {
         .card { padding:12px; border:1px solid var(--divider-color); border-radius:10px; background:var(--card-background-color, transparent); }
         .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .topbar { justify-content:space-between; }
+        .action-list { display:grid; gap:8px; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }
+        .action-item { border-left:4px solid var(--primary-color); padding:8px 10px; background:var(--secondary-background-color, transparent); }
         table { width:100%; border-collapse:collapse; }
         th, td { border-bottom:1px solid var(--divider-color); padding:6px; text-align:left; }
         .risk { padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
@@ -164,6 +172,10 @@ class HaContextExplorerNextPanel extends HTMLElement {
           <div class="controls topbar">
             <button id="refreshBtn" type="button">${t(this._lang, "reload")}</button>
             <small id="lastUpdated">${t(this._lang, "loading")}</small>
+          </div>
+          <div class="card">
+            <h3>${t(this._lang, "actionOverview")}</h3>
+            <div id="actionOverview" class="action-list"></div>
           </div>
           <div class="card">
             <h3>${t(this._lang, "batteryHealth")}</h3>
@@ -256,6 +268,24 @@ class HaContextExplorerNextPanel extends HTMLElement {
 
   _rec(rec) {
     return `<div class="card"><b>[${rec.severity.toUpperCase()}] ${rec.title}</b><div>${rec.detail}</div><small>category=${rec.category || "general"}, confidence=${rec.confidence ?? "-"}</small><br><small><b>${t(this._lang, "next")}:</b> ${rec.next_action || "-"}</small></div>`;
+  }
+
+  _renderActionOverview(recommendations) {
+    const target = this.querySelector("#actionOverview");
+    if (!target) return;
+    const top = (recommendations || []).slice(0, 3);
+    if (!top.length) {
+      target.innerHTML = `<div class="hint">${t(this._lang, "noUrgentActions")}</div>`;
+      return;
+    }
+    target.innerHTML = top
+      .map((rec) => `
+        <div class="action-item">
+          <b>${this._escape(rec.title)}</b>
+          <div class="hint">${t(this._lang, "priority")}: ${this._escape(rec.severity)} - ${this._escape(rec.category || "general")}</div>
+          <div>${this._escape(rec.next_action || rec.detail || "-")}</div>
+        </div>`)
+      .join("");
   }
 
   _formatBytes(value) {
@@ -559,6 +589,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       const batteryLow = payload.battery?.battery_entities_low ?? 0;
       const batteryCritical = payload.battery?.battery_entities_critical ?? 0;
       const topNoise = (payload.noise?.top_noisy_entities || []).slice(0, 5);
+      const recommendations = payload.recommendations || [];
 
       this.querySelector("#kpis").innerHTML = [
         this._kpi(t(this._lang, "entities"), entitiesTotal),
@@ -570,6 +601,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this.querySelector("#noise").innerHTML = topNoise
         .map((item) => `<li>${item.entity_id} — ${t(this._lang, "score")} ${item.noise_score}</li>`)
         .join("");
+      this._renderActionOverview(recommendations);
 
 
       const domainHealthRows = (payload.domain_health || [])
@@ -637,7 +669,7 @@ class HaContextExplorerNextPanel extends HTMLElement {
       this._renderRecorderTable(recorderAdvice);
       await this._loadExport();
 
-      this.querySelector("#recs").innerHTML = (payload.recommendations || []).map((rec) => this._rec(rec)).join("");
+      this.querySelector("#recs").innerHTML = recommendations.map((rec) => this._rec(rec)).join("");
       this._setText("#lastUpdated", `${t(this._lang, "lastUpdated")}: ${new Date().toLocaleTimeString()}`);
     } catch (err) {
       this._showFatalError(err);
