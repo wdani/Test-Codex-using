@@ -1,4 +1,4 @@
-const PANEL_FRONTEND_VERSION = "0.1.1";
+const PANEL_FRONTEND_VERSION = "0.1.2";
 
 const I18N = {
   en: {
@@ -704,4 +704,6 @@ class HaContextExplorerNextPanel extends HTMLElement {
   }
 }
 
-customElements.define("ha-context-explorer-next-panel", HaContextExplorerNextPanel);
+if (!customElements.get("ha-context-explorer-next-panel")) {
+  customElements.define("ha-context-explorer-next-panel", HaContextExplorerNextPanel);
+}
