@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .api import async_register_api
-from .const import DOMAIN, PANEL_ICON, PANEL_MODULE_URL, PANEL_TITLE, PANEL_URL, PLATFORMS
+from .const import DOMAIN, PANEL_ICON, PANEL_MODULE_PATH, PANEL_MODULE_URL, PANEL_TITLE, PANEL_URL, PLATFORMS
 from .privacy_key import async_load_or_create_privacy_key
 
 
@@ -23,7 +23,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not state.get("static_registered"):
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(PANEL_MODULE_URL, _module_path(), cache_headers=False)]
+            [StaticPathConfig(PANEL_MODULE_PATH, _module_path(), cache_headers=False)]
         )
         state["static_registered"] = True
 
